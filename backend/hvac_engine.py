@@ -75,3 +75,29 @@ def calculate_total_load(inputs: dict) -> dict:
         "total": convert_units(total),
         "airflow": {"CFM": CFM, "CMH": CMH},
     }
+
+# ── Quick test — run: python backend/hvac_engine.py ──────────
+if __name__ == "__main__":
+    test_cabin = {
+        "glass_area":      0.5,    # m2  — one porthole
+        "SHGC":            0.6,    # single glazing
+        "irradiance":      950,   # W/m2 — Indian Ocean July
+        "U_value":         0.7,    # W/m2K — 50mm insulation
+        "wall_area":       32,    # m2 — total exposed walls
+        "delta_T":         16,    # outside 38C, inside 22C
+        "num_people":      2,     # two passengers
+        "activity":        "seated",
+        "equipment_watts": 150,   # lights + TV
+        "fresh_air_CFM":   40,    # ASHRAE min for 2 persons
+        "outside_temp":    38,    # degrees C
+    }
+    result = calculate_total_load(test_cabin)
+    print("=== CABIN RESULT ===")
+    print(f"TR  : {result['total']['TR']} tons of refrigeration")
+    print(f"kW  : {result['total']['kW']} kilowatts")
+    print(f"BTU : {result['total']['BTU_hr']} BTU/hr")
+    print(f"CFM : {result['airflow']['CFM']} cubic feet/min")
+    print(f"CMH : {result['airflow']['CMH']} cubic metres/hr")
+    print("\nBreakdown:")
+    for k, v in result["breakdown"].items():
+        print(f"  {k:15s}: {round(v,1):8.1f} W")
