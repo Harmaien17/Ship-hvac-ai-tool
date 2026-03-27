@@ -1,64 +1,177 @@
-import requests
 import os
+import json
+import time
+import logging
+from pathlib import Path
+from typing import Optional
+
+import requests
 from dotenv import load_dotenv
 
-load_dotenv()   # reads your .env file
+load_dotenv()
 
-API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
-BASE_URL = "https://api.openweathermap.org/data/2.5/weather"
+logger = logging.getLogger("mar_hvac.weather")
 
-def get_weather_by_coords(lat: float, lon: float) -> dict:
-    """Fetch current weather for a lat/lon position (ship at sea)."""
-    if not API_KEY:
-        # No API key — return tropical defaults so app still works
-        return {
-            "temperature_C": 35.0,
-            "humidity_pct":  85.0,
-            "description":   "API key not set — using tropical defaults",
-            "city":          f"Position {lat:.2f}, {lon:.2f}",
-        }
+# ─────────────────────────────────────────────────────────────
+# CONFIG
+# ─────────────────────────────────────────────────────────────
+
+OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
+OW_BASE_URL         = "https://api.openweathermap.org/data/2.5"
+
+# forecast_cache.json lives inside the backend/ folder
+CACHE_FILE_PATH = Path(__file__).parent / "forecast_cache.json"
+
+# How old can the saved forecast be before we consider it expired?
+FORECAST_MAX_AGE_HOURS = 168   # 7 days = 168 hours
+
+
+# ─────────────────────────────────────────────────────────────
+# 1. FETCH CURRENT WEATHER (live)
+# ─────────────────────────────────────────────────────────────
+
+def fetch_current_weather(lat: float, lon: float) -> Optional[dict]:
+    """
+    Fetch current weather conditions from OpenWeather API.
+    """
+    if not OPENWEATHER_API_KEY:
+        logger.warning("[WEATHER] No API key set in .env file.")
+        return None
+
     try:
-        params = {
-            "lat":   lat,
-            "lon":   lon,
-            "appid": API_KEY,
-            "units": "metric",   # gives Celsius directly
-        }
-        r = requests.get(BASE_URL, params=params, timeout=8)
-        r.raise_for_status()
-        data = r.json()
-        return {
-            "temperature_C": round(data["main"]["temp"], 1),
-            "humidity_pct":  round(data["main"]["humidity"], 1),
-            "description":   data["weather"][0]["description"].capitalize(),
-            "city":          data.get("name", f"At sea {lat:.2f}N {lon:.2f}E"),
-        }
-    except requests.exceptions.RequestException as e:
-        return {
-            "temperature_C": 35.0,
-            "humidity_pct":  85.0,
-            "description":   f"Weather fetch failed: {str(e)}",
-            "city":          "Fallback data",
-        }
+        response = requests.get(
+            f"{OW_BASE_URL}/weather",
+            params={
+                "lat":   lat,
+                "lon":   lon,
+                "appid": OPENWEATHER_API_KEY,
+                "units": "metric",
+            },
+            timeout=5
+        )
+        response.raise_for_status()
 
-def get_weather_by_city(city: str) -> dict:
-    """Fetch weather by city name — useful for port cities."""
-    if not API_KEY:
-        return {"temperature_C":32.0,"humidity_pct":80.0,"description":"No API key","city":city}
+        data = response.json()
+        result = {
+            "temp":        data["main"]["temp"],
+            "humidity":    data["main"]["humidity"],
+            "solar":       400.0,
+            "description": data["weather"][0]["description"],
+            "fetched_at":  time.time(),
+        }
+        logger.info(f"[WEATHER] Live: {result['temp']}C @ ({lat},{lon})")
+        return result
+
+    except Exception as e:
+        logger.error(f"[WEATHER] Live fetch failed: {e}")
+        return None
+
+
+# ─────────────────────────────────────────────────────────────
+# 2. FETCH AND SAVE 7-DAY FORECAST  (the Starlink buffer)
+# ─────────────────────────────────────────────────────────────
+
+def fetch_7day_forecast(lat: float, lon: float) -> list[dict]:
+    """Fetch 5-day / 3-hour forecast from OpenWeather API."""
+    if not OPENWEATHER_API_KEY:
+        return []
+
     try:
-        r = requests.get(BASE_URL, params={"q":city,"appid":API_KEY,"units":"metric"}, timeout=8)
-        r.raise_for_status()
-        data = r.json()
-        return {
-            "temperature_C": round(data["main"]["temp"], 1),
-            "humidity_pct":  round(data["main"]["humidity"], 1),
-            "description":   data["weather"][0]["description"].capitalize(),
-            "city":          data.get("name", city),
-        }
-    except:
-        return {"temperature_C":32.0,"humidity_pct":80.0,"description":"Fetch failed","city":city}
+        response = requests.get(
+            f"{OW_BASE_URL}/forecast",
+            params={"lat": lat, "lon": lon, "appid": OPENWEATHER_API_KEY, "units": "metric"},
+            timeout=10
+        )
+        response.raise_for_status()
 
-# Quick test
-if __name__ == "__main__":
-    result = get_weather_by_city("Mumbai")
-    print("Mumbai weather:", result)
+        items = response.json().get("list", [])
+        return [
+            {
+                "ts":          item["dt"],
+                "temp":        item["main"]["temp"],
+                "humidity":    item["main"]["humidity"],
+                "description": item["weather"][0]["description"],
+                "solar":       400.0,
+            }
+            for item in items
+        ]
+    except Exception as e:
+        logger.error(f"[FORECAST] Fetch error: {e}")
+        return []
+
+
+def save_forecast_cache(lat: float, lon: float, points: list[dict]) -> bool:
+    """Save forecast points to forecast_cache.json."""
+    if not points:
+        return False
+
+    data_to_save = {
+        "saved_at":    time.time(),
+        "lat":         lat,
+        "lon":         lon,
+        "point_count": len(points),
+        "points":      points,
+    }
+
+    try:
+        with open(CACHE_FILE_PATH, "w", encoding="utf-8") as f:
+            json.dump(data_to_save, f, indent=2)
+        return True
+    except Exception:
+        return False
+
+
+def fetch_and_save_7day_forecast(lat: float, lon: float) -> bool:
+    """Convenience function: fetch AND save to disk."""
+    points = fetch_7day_forecast(lat, lon)
+    return save_forecast_cache(lat, lon, points)
+
+
+# ─────────────────────────────────────────────────────────────
+# 3. LOAD SAVED FORECAST  (offline fallback)
+# ─────────────────────────────────────────────────────────────
+
+def load_forecast_cache() -> Optional[dict]:
+    """Load the saved forecast from forecast_cache.json."""
+    if not CACHE_FILE_PATH.exists():
+        return None
+
+    try:
+        with open(CACHE_FILE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        age_hours = (time.time() - data["saved_at"]) / 3600
+        if age_hours > FORECAST_MAX_AGE_HOURS:
+            return None
+        return data
+    except Exception:
+        return None
+
+
+def get_cache_age_hours() -> Optional[float]:
+    """Age of the saved forecast cache in hours."""
+    cache = load_forecast_cache()
+    if not cache:
+        return None
+    return round((time.time() - cache["saved_at"]) / 3600, 1)
+
+
+# ─────────────────────────────────────────────────────────────
+# 4. LOOK UP DATA FROM SAVED FORECAST
+# ─────────────────────────────────────────────────────────────
+
+def get_temp_for_hours_ahead(hours_ahead: float = 0.0) -> Optional[float]:
+    """Predicted temperature for N hours in the future."""
+    cache = load_forecast_cache()
+    if not cache or not cache.get("points"):
+        return None
+
+    target_ts = time.time() + (hours_ahead * 3600)
+    closest = min(cache["points"], key=lambda p: abs(p["ts"] - target_ts))
+    return closest["temp"]
+
+
+def get_forecast_summary_for_chart() -> list[dict]:
+    """Return all forecast points for the Streamlit chart."""
+    cache = load_forecast_cache()
+    return cache.get("points", []) if cache else []
