@@ -1,50 +1,151 @@
-from pydantic import BaseModel, Field
-from typing import Optional, Dict
+"""
+MAR-HVAC AI — Pydantic Data Models
+backend/schemas.py
 
-# ── What the user sends TO the API ───────────────────────────
-class RoomInput(BaseModel):
-    # Space geometry
-    glass_area:       float = Field(0.5,  description="Glass/porthole area in m2",         ge=0)
-    SHGC:             float = Field(0.6,  description="Solar Heat Gain Coefficient 0-1",    ge=0, le=1)
-    irradiance:       float = Field(950, description="Solar irradiance W/m2",               ge=0)
-    U_value:          float = Field(0.7,  description="Wall U-value W/m2K",                ge=0.1)
-    wall_area:        float = Field(32,  description="Total exposed wall area m2",         ge=1)
-    delta_T:          float = Field(16,  description="Outside minus inside temperature C",  ge=0)
-    # Occupancy
-    num_people:       int   = Field(2,   description="Number of occupants",               ge=0)
-    activity:         str   = Field("seated", description="sleeping/seated/standing/active/engine_crew")
-    # Equipment
-    equipment_watts:  float = Field(150, description="Lights + equipment total watts",      ge=0)
-    # Ventilation
-    fresh_air_CFM:    float = Field(40,  description="Fresh outside air in CFM",            ge=0)
-    outside_temp:     float = Field(38,  description="Outside air temperature C")
-    # Optional ship info
-    ship_type:        Optional[str]   = Field("cruise", description="cargo/cruise/naval/tanker")
-    space_type:       Optional[str]   = Field("cabin",  description="cabin/engine_room/bridge/galley")
-    room_name:        Optional[str]   = Field("Cabin 1",description="Label for this room")
+All request/response shapes for the MAR-HVAC system.
+YOU are the only one who edits this file.
+"""
 
-# ── What the API sends BACK ───────────────────────────────────
-class LoadResult(BaseModel):
-    watts:   float
-    kW:      float
-    TR:      float
-    BTU_hr:  float
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional
+from enum import Enum
 
-class AirflowResult(BaseModel):
-    CFM: float
-    CMH: float
 
-class CalculationResponse(BaseModel):
-    room_name:  str
-    total:      LoadResult
-    airflow:    AirflowResult
-    breakdown:  Dict[str, float]
-    status:     str = "success"
+# ─────────────────────────────────────────────
+# ENUMS
+# ─────────────────────────────────────────────
 
-# ── Weather response ──────────────────────────────────────────
-class WeatherResponse(BaseModel):
-    temperature_C:  float
-    humidity_pct:   float
-    description:    str
-    city:           str
-    status:         str = "success"
+class CabinSide(str, Enum):
+    STARBOARD = "starboard"   # Right side — morning sun
+    PORT      = "port"        # Left side — afternoon sun
+    INTERIOR  = "interior"    # No direct hull exposure
+    BOW       = "bow"         # Forward-facing
+    STERN     = "stern"       # Aft — near engine
+
+
+class HVACMode(str, Enum):
+    FULL_COOLING          = "FULL_COOLING"
+    REDUCED_COOLING       = "REDUCED_COOLING"
+    MAINTENANCE_COOLING   = "MAINTENANCE_COOLING"   # Ghost cooling — empty cabin
+    STANDBY               = "STANDBY"
+    FAILSAFE              = "FAILSAFE"              # No internet at sea
+    EMERGENCY_HEAT        = "EMERGENCY_HEAT"        # Arctic route
+    CORROSION_PREVENTION  = "CORROSION_PREVENTION"  # Dew point / humidity risk
+    MOLD_ALERT            = "MOLD_ALERT"            # RH too high for too long
+
+
+# ─────────────────────────────────────────────
+# INPUT MODELS
+# ─────────────────────────────────────────────
+
+class CabinTelemetry(BaseModel):
+    """
+    Real-time telemetry for one cabin.
+    Sources: PIR (occupancy), DHT22 (temp/humidity),
+             OpenWeather API (external_temp), manual toggles.
+    """
+
+    cabin_id          : str
+    occupancy         : bool                                            # PIR sensor
+    internal_temp     : float = Field(..., ge=-10.0, le=60.0)         # DHT22 degrees C
+    internal_humidity : float = Field(default=60.0, ge=0.0, le=100.0) # DHT22 %RH
+    external_temp     : Optional[float] = Field(default=None, ge=-30.0, le=60.0)
+    solar_irradiance  : Optional[float] = Field(default=None, ge=0.0, le=1200.0)
+
+    # Ship dynamics toggles
+    direct_sunlight   : bool      = False
+    heat_soaked_hull  : bool      = False
+    engine_adjacent   : bool      = False
+    cabin_side        : CabinSide = CabinSide.INTERIOR
+
+    # Setpoint and geometry
+    target_temp       : float = Field(default=22.0, ge=16.0, le=30.0)
+    cabin_area_m2     : float = Field(default=20.0, ge=5.0, le=200.0)
+
+    # Market segment — changes thresholds per vessel type
+    market_segment    : str = "cargo"   # cargo | cruise | navy | hospital | yacht
+
+    @field_validator("internal_temp")
+    @classmethod
+    def temp_sanity(cls, v):
+        if v > 45:
+            raise ValueError("Internal temp >45 degrees — sensor may be faulty.")
+        return round(v, 2)
+
+    @field_validator("external_temp")
+    @classmethod
+    def ext_temp_round(cls, v):
+        return round(v, 2) if v is not None else None
+
+
+# ─────────────────────────────────────────────
+# CACHE MODELS
+# ─────────────────────────────────────────────
+
+class WeatherCache(BaseModel):
+    """Short-term weather cache — 1 hour expiry."""
+    temperature      : float
+    humidity         : float
+    solar_irradiance : float = 400.0
+    timestamp        : float   # Unix timestamp of last successful fetch
+    source           : str = "openweather_api"
+
+
+class ForecastPoint(BaseModel):
+    """Single data point in the 7-day Starlink forecast buffer."""
+    timestamp  : float
+    temp       : float
+    humidity   : float
+    description: str = ""
+
+
+# ─────────────────────────────────────────────
+# OUTPUT MODELS
+# ─────────────────────────────────────────────
+
+class HeatLoadBreakdown(BaseModel):
+    """
+    Decomposed heat load — contribution of each factor in kW.
+    Shown in AI Decision Log and Plotly breakdown chart.
+    """
+    q_transmission    : float   # Conduction through hull/walls (kW)
+    q_solar           : float   # Solar gain through portholes (kW)
+    q_internal        : float   # Metabolic heat — occupants + equipment (kW)
+    q_engine_radiant  : float   # Radiant heat from adjacent engine room (kW)
+    q_thermal_lag     : float   # Stored heat release from heat-soaked hull (kW)
+    q_latent          : float   # Latent load from salt-air humidity (kW)
+    q_waste_heat_saved: float = 0.0   # Energy recovered from engine exhaust (kW)
+    q_total_raw       : float   # Sum of all loads before AI optimisation (kW)
+
+
+class HVACDecision(BaseModel):
+    """
+    Full output from the MAR-HVAC AI engine for one cabin.
+    Contains the optimised load, mode, step-by-step reasoning log,
+    and all intermediate calculated values.
+    """
+    cabin_id               : str
+    mode                   : HVACMode
+    optimized_load_kw      : float
+    setpoint_actual        : float
+    energy_saved_percent   : float = Field(ge=0.0, le=100.0)
+    breakdown              : HeatLoadBreakdown
+    decision_log           : list[str]
+    warnings               : list[str] = []
+    weather_source         : str   # 'api_live' | 'cache' | 'stale_cache' | 'dht22_fallback'
+    data_age_seconds       : Optional[float] = None
+    dew_point              : Optional[float] = None
+    waste_heat_available_kw: float = 0.0
+
+
+class FleetSummary(BaseModel):
+    """Aggregated status across all cabins for the fleet overview panel."""
+    total_cabins          : int
+    occupied_cabins       : int
+    ghost_cooling_cabins  : int
+    corrosion_risk_cabins : int = 0
+    total_load_kw         : float
+    baseline_load_kw      : float
+    fleet_savings_percent : float
+    total_waste_heat_kw   : float = 0.0
+    cabins                : list[HVACDecision]
