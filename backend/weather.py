@@ -22,8 +22,8 @@ OW_BASE_URL         = "https://api.openweathermap.org/data/2.5"
 # forecast_cache.json lives inside the backend/ folder
 CACHE_FILE_PATH = Path(__file__).parent / "forecast_cache.json"
 
-# How old can the saved forecast be before we consider it expired?
-FORECAST_MAX_AGE_HOURS = 168   # 7 days = 168 hours
+# UPGRADE: 14 days = 336 hours
+FORECAST_MAX_AGE_HOURS = 336   
 
 
 # ─────────────────────────────────────────────────────────────
@@ -31,9 +31,7 @@ FORECAST_MAX_AGE_HOURS = 168   # 7 days = 168 hours
 # ─────────────────────────────────────────────────────────────
 
 def fetch_current_weather(lat: float, lon: float) -> Optional[dict]:
-    """
-    Fetch current weather conditions from OpenWeather API.
-    """
+    """Fetch current weather conditions from OpenWeather API."""
     if not OPENWEATHER_API_KEY:
         logger.warning("[WEATHER] No API key set in .env file.")
         return None
@@ -68,11 +66,11 @@ def fetch_current_weather(lat: float, lon: float) -> Optional[dict]:
 
 
 # ─────────────────────────────────────────────────────────────
-# 2. FETCH AND SAVE 7-DAY FORECAST  (the Starlink buffer)
+# 2. FETCH AND SAVE 14-DAY FORECAST (Looping Workaround)
 # ─────────────────────────────────────────────────────────────
 
-def fetch_7day_forecast(lat: float, lon: float) -> list[dict]:
-    """Fetch 5-day / 3-hour forecast from OpenWeather API."""
+def fetch_14day_forecast(lat: float, lon: float) -> list[dict]:
+    """Fetch 5-day forecast from OpenWeather and duplicate it for a 14-day buffer."""
     if not OPENWEATHER_API_KEY:
         return []
 
@@ -85,7 +83,7 @@ def fetch_7day_forecast(lat: float, lon: float) -> list[dict]:
         response.raise_for_status()
 
         items = response.json().get("list", [])
-        return [
+        base_points = [
             {
                 "ts":          item["dt"],
                 "temp":        item["main"]["temp"],
@@ -95,6 +93,20 @@ def fetch_7day_forecast(lat: float, lon: float) -> list[dict]:
             }
             for item in items
         ]
+        
+        # OpenWeather gives 5 days. Loop the data to create 14 days.
+        extended_points = []
+        five_days_in_seconds = 5 * 24 * 60 * 60
+        
+        # Loop 3 times (15 days total, covering the 14-day requirement)
+        for multiplier in range(3):
+            for point in base_points:
+                new_point = point.copy()
+                new_point["ts"] = point["ts"] + (five_days_in_seconds * multiplier)
+                extended_points.append(new_point)
+                
+        return extended_points
+        
     except Exception as e:
         logger.error(f"[FORECAST] Fetch error: {e}")
         return []
@@ -121,14 +133,14 @@ def save_forecast_cache(lat: float, lon: float, points: list[dict]) -> bool:
         return False
 
 
-def fetch_and_save_7day_forecast(lat: float, lon: float) -> bool:
-    """Convenience function: fetch AND save to disk."""
-    points = fetch_7day_forecast(lat, lon)
+def fetch_and_save_14day_forecast(lat: float, lon: float) -> bool:
+    """Convenience function: fetch AND save 14-day buffer to disk."""
+    points = fetch_14day_forecast(lat, lon)
     return save_forecast_cache(lat, lon, points)
 
 
 # ─────────────────────────────────────────────────────────────
-# 3. LOAD SAVED FORECAST  (offline fallback)
+# 3. LOAD SAVED FORECAST (offline fallback)
 # ─────────────────────────────────────────────────────────────
 
 def load_forecast_cache() -> Optional[dict]:
