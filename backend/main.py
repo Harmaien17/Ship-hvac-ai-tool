@@ -1,149 +1,140 @@
-from fastapi import FastAPI, Query, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+import os
 import time
 import logging
+from contextlib import asynccontextmanager
+from typing import Optional
 
-# Updated to import the 14-day functions
-from weather import (
-    fetch_current_weather,
-    load_forecast_cache,
-    get_temp_for_hours_ahead,
-    fetch_and_save_14day_forecast,
-    get_forecast_summary_for_chart
+import requests
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from schemas import (
+    CabinTelemetry, HVACDecision, FleetSummary,
+    WasteHeatInput, WasteHeatResult, DrawingParseResult,
 )
+from hvac_engine import (
+    calculate_optimized_load, calculate_fleet_summary,
+    update_weather_cache, get_cached_weather,
+    GHOST_COOLING_FRACTION, U_HULL_INSULATED, U_HULL_BARE,
+    ENGINE_RADIANT_W_M2, THERMAL_LAG_W_M2,
+    METABOLIC_W_PER_PERSON, LATENT_CORRECTION, CACHE_EXPIRY_SECONDS,
+)
+from weather import (
+    fetch_current_weather, 
+    fetch_and_save_14day_forecast,  # FIXED: Matches your weather.py logic
+    get_forecast_summary_for_chart, 
+    get_temp_for_hours_ahead, 
+    get_cache_age_hours,
+    load_forecast_cache,
+)
+from asset_defence import (
+    run_asset_defence_checks,       # FIXED: Matches your asset_defence.py
+    calculate_dew_point,
+    MOLD_RH_THRESHOLD,
+)
+from waste_heat import calculate_waste_heat_recovery
+from autocad_parser import parse_ship_drawing_pdf, ask_mar_chat
 
-# Set up logging for your terminal
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
 logger = logging.getLogger("mar_hvac.api")
 
-app = FastAPI(title="MAR-HVAC AI Backend", version="1.0.0")
+OW_KEY = os.getenv("OPENWEATHER_API_KEY", "")
+_last_decisions: dict[str, dict] = {}
 
-# CORS config to allow the Streamlit dashboard to connect over the Wi-Fi
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("MAR-HVAC AI starting up...")
+    yield
+    logger.info("MAR-HVAC AI shutting down.")
+
+app = FastAPI(
+    title="MAR-HVAC AI",
+    description="Marine Heat Load Optimisation Backend",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-def startup_event():
-    logger.info("MAR-HVAC AI backend starting up...")
-    cache = load_forecast_cache()
-    if not cache:
-        logger.warning("No forecast buffer found. Call /api/v1/weather/forecast to pre-fetch.")
+def _resolve_external_temp(lat: float, lon: float) -> Optional[float]:
+    live = fetch_current_weather(lat, lon)
+    if live:
+        update_weather_cache(live["temp"], live["humidity"], live["solar"])
+        return live["temp"]
+    cache, status = get_cached_weather()
+    if cache and status == "cache":
+        return cache.temperature
+    fc_temp = get_temp_for_hours_ahead(0)
+    return fc_temp
 
 @app.get("/api/v1/health")
-def health_check():
-    return {"status": "online", "timestamp": time.time()}
+def health():
+    cache, status = get_cached_weather()
+    return {"status": "online", "weather_cache": status, "api_key": bool(OW_KEY)}
 
-# --- WEEK 3: WEATHER ENDPOINTS ---
+@app.post("/api/v1/optimize", response_model=HVACDecision)
+def optimize(telemetry: CabinTelemetry, lat: float = 19.0760, lon: float = 72.8777):
+    if telemetry.external_temp is None:
+        resolved = _resolve_external_temp(lat, lon)
+        if resolved is not None:
+            telemetry = telemetry.model_copy(update={"external_temp": resolved})
+
+    # Run Asset Defence Checks
+    asset = run_asset_defence_checks(
+        cabin_id=telemetry.cabin_id,
+        internal_temp=telemetry.internal_temp,
+        internal_rh=telemetry.internal_humidity,
+        external_temp=telemetry.external_temp,
+        target_temp=telemetry.target_temp,
+        market_segment=telemetry.market_segment
+    )
+
+    try:
+        decision = calculate_optimized_load(telemetry)
+        
+        # Merge Asset Defence logs and warnings into the main decision
+        decision.decision_log.extend(asset.log_lines)
+        for w in asset.warnings:
+            if w not in decision.warnings:
+                decision.warnings.append(w)
+        
+        decision.dew_point = asset.dew_point_c
+        _last_decisions[telemetry.cabin_id] = decision.model_dump()
+        
+        return decision
+    except Exception as e:
+        logger.exception(f"Engine error: {e}")
+        raise HTTPException(500, f"Engine error: {e}")
 
 @app.get("/api/v1/weather/forecast")
-def trigger_forecast_fetch(lat: float = Query(19.076), lon: float = Query(72.8777)):
-    """Pre-fetch the 14-day Starlink buffer and save to JSON."""
+def forecast_save(lat: float = 19.0760, lon: float = 72.8777):
+    """Week 3 — Fetch and save 14-day Starlink forecast buffer."""
     success = fetch_and_save_14day_forecast(lat, lon)
     if success:
-        return {"status": "success", "message": "14-day forecast buffered for offline use."}
-    raise HTTPException(status_code=500, detail="Failed to fetch forecast from OpenWeather.")
+        return {"success": True, "cache_age_h": get_cache_age_hours()}
+    return {"success": False, "message": "Fetch failed."}
 
-@app.get("/api/v1/weather/forecast/chart")
-def get_forecast_chart(lat: float = Query(19.076), lon: float = Query(72.8777)):
-    """Provide the buffer data to the dashboard for charting."""
-    data = get_forecast_summary_for_chart()
-    return {"data": data}
+@app.post("/api/v1/waste-heat", response_model=WasteHeatResult)
+def waste_heat(inp: WasteHeatInput):
+    return calculate_waste_heat_recovery(inp)
 
-@app.get("/api/v1/weather/update")
-def get_weather_update(lat: float = Query(19.076), lon: float = Query(72.8777)):
-    """Manual trigger to fetch live weather."""
-    data = fetch_current_weather(lat, lon)
-    return {"data": data}
-
-# --- THE MAIN AI OPTIMIZATION ENGINE ---
-
-@app.post("/api/v1/optimize")
-def optimize_hvac(
-    lat: float = Query(19.076), 
-    lon: float = Query(72.8777),
-    segment: str = Query("cargo"),
-    occupied: bool = Query(True)
-):
-    logger.info(f"Optimize: string | occupied={occupied} | segment={segment}")
-    
-    # --- SMART WEATHER FALLBACK (Fail-Safe Chain) ---
-    weather_data = None
-    source = "unknown"
-    
-    try:
-        # PLAN A: Try Live API first
-        weather_data = fetch_current_weather(lat, lon)
-        if weather_data is None:
-            raise ValueError("API returned None")
-        source = "live_api"
-    except Exception as e:
-        logger.warning(f"Live API failed: {e}. Falling back to cache.")
-        
-        # PLAN B: If internet is down, use the Starlink Buffer
-        cache = load_forecast_cache()
-        if cache:
-            # Get the temp for "0 hours ahead" (right now) from the file
-            temp = get_temp_for_hours_ahead(0)
-            weather_data = {
-                "temp": temp,
-                "humidity": 80.0, # Default for sea
-                "description": "Starlink Offline - Using Forecast Cache"
-            }
-            source = "forecast_buffer"
-        else:
-            # PLAN C: Absolute backup if even the file is missing
-            weather_data = {"temp": 35.0, "humidity": 85.0, "description": "Manual Safety Mode"}
-            source = "hardcoded_safety"
-
-    logger.info(f"[CACHE] Updated — {weather_data['temp']}C, {weather_data['humidity']}%RH [{source}]")
-
-    # --- HVAC LOGIC & CALCULATIONS ---
-    # Determine the mode based on temperature
-    if weather_data["temp"] > 30:
-        mode = "MAX_COOLING"
-        power = 1.250
-        savings = 5.0
-    elif weather_data["temp"] < 15:
-        mode = "EMERGENCY_HEAT"
-        power = 0.850
-        savings = 12.0
-    else:
-        mode = "ECONOMY"
-        power = 0.206
-        savings = 19.0
-
-    logger.info(f"Result: string | {mode} | {power} kW | saved {savings}%")
-
+@app.get("/api/v1/constants")
+def constants():
     return {
-        "status": "success",
-        "mode": mode,
-        "power_kw": power,
-        "savings_pct": savings,
-        "weather_source": source,
-        "current_weather": weather_data
+        "ghost_cooling_fraction": GHOST_COOLING_FRACTION,
+        "u_hull_insulated": U_HULL_INSULATED,
+        "metabolic_w_per_person": METABOLIC_W_PER_PERSON,
+        "mold_thresholds": MOLD_RH_THRESHOLD,
     }
-
-# --- WEEK 4: ASSET DEFENCE & FLEET ENDPOINTS ---
-
-@app.post("/api/v1/optimize/fleet")
-def optimize_fleet(lat: float = Query(19.076), lon: float = Query(72.8777)):
-    logger.info("Fleet: 1 cabins")
-    logger.info("Fleet: 0.21 kW | savings 0.1% | ghost 0/1")
-    return {"status": "success", "fleet_power_kw": 0.21}
-
-@app.get("/api/v1/asset-defence/status")
-def asset_defence_status(
-    cabin_id: str = "CABIN-A1", 
-    internal_temp: float = 26.0, 
-    internal_rh: float = 65.0, 
-    market_segment: str = "cargo", 
-    is_medicine_room: bool = False
-):
-    # Basic logic to prevent frontend errors
-    return {"status": "safe", "mold_risk": False, "corrosion_risk": False}
