@@ -2,6 +2,10 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from enum import Enum
 
+# ─────────────────────────────────────────────────────────────
+# 1. ENUMS & CORE TELEMETRY
+# ─────────────────────────────────────────────────────────────
+
 class CabinSide(str, Enum):
     STARBOARD = "starboard"
     PORT      = "port"
@@ -40,6 +44,10 @@ class CabinTelemetry(BaseModel):
     floor_area_exposed_m2   : float = 0.0
     target_temp : float = Field(default=22.0, ge=16.0, le=30.0)
 
+# ─────────────────────────────────────────────────────────────
+# 2. CALCULATION RESULTS
+# ─────────────────────────────────────────────────────────────
+
 class HeatLoadBreakdown(BaseModel):
     q_transmission     : float
     q_solar            : float
@@ -65,7 +73,6 @@ class HVACDecision(BaseModel):
     warnings                : List[str] = []
     weather_source          : str
     dew_point               : Optional[float] = None
-    # ROI FIELDS
     money_saved_hr_inr      : float = 0.0
     co2_saved_hr_kg         : float = 0.0
     annual_roi_inr          : float = 0.0
@@ -76,16 +83,45 @@ class FleetSummary(BaseModel):
     total_load_kw         : float
     total_annual_savings_inr : float = 0.0
     total_annual_co2_tons    : float = 0.0
-    cabins                   : list[HVACDecision] # Python 3.12 compatibility
+    cabins                   : list[HVACDecision] 
+
+# ─────────────────────────────────────────────────────────────
+# 3. WEATHER & FORECAST (FIXED FOR API SYNC)
+# ─────────────────────────────────────────────────────────────
+
+class WeatherPoint(BaseModel):
+    ts: int           # Standard Unix timestamp
+    temp: float       # Celsius
+    humidity: int     # Percentage
+    description: str
+    solar: float
 
 class WeatherCache(BaseModel):
-    temperature: float; humidity: float; solar_irradiance: float; timestamp: float; source: str
+    saved_at: float
+    lat: float
+    lon: float
+    points: List[WeatherPoint] # List of 120 points for 14-day chart
+
+# ─────────────────────────────────────────────────────────────
+# 4. AUXILIARY MODULES
+# ─────────────────────────────────────────────────────────────
 
 class WasteHeatInput(BaseModel):
-    exhaust_temp_c: float; ambient_temp_c: float; exhaust_flow_kg_s: float; recovery_efficiency: float
+    exhaust_temp_c: float
+    ambient_temp_c: float
+    exhaust_flow_kg_s: float
+    recovery_efficiency: float
 
 class WasteHeatResult(BaseModel):
-    gross_heat_kw: float; recoverable_kw: float; hvac_offset_kw: float; co2_saved_kg_per_hr: float; log_lines: List[str]
+    gross_heat_kw: float
+    recoverable_kw: float
+    hvac_offset_kw: float
+    co2_saved_kg_per_hr: float
+    log_lines: List[str]
 
 class DrawingParseResult(BaseModel):
-    success: bool; cabin_id: str; cabin_area_m2: Optional[float]; window_area_m2: Optional[float]; parse_notes: List[str]
+    success: bool
+    cabin_id: str
+    cabin_area_m2: Optional[float]
+    window_area_m2: Optional[float]
+    parse_notes: List[str]

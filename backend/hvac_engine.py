@@ -1,68 +1,176 @@
-import time
+import math
 import logging
-from typing import Optional
-from schemas import CabinTelemetry, HVACDecision, HeatLoadBreakdown, HVACMode, WeatherCache, FleetSummary
-from economics import calculate_roi_metrics
+from typing import List
 
-# PHYSICAL CONSTANTS
-U_HULL_INSULATED = 0.65; U_HULL_BARE = 4.8; U_DECK_SLAB = 1.2; U_ROOF_EXPOSED = 2.8
-WALL_AREA_FACTOR = 1.8; SHGC_WINDOW = 0.65; SOL_AIR_DELTA_T = 15.0
-METABOLIC_W_PER_PERSON = 75; ENGINE_RADIANT_W_M2 = 85; THERMAL_LAG_W_M2 = 55
-LATENT_CORRECTION = 1.18
+# ─────────────────────────────────────────────────────────────
+# IMPORTANT FIX: FleetSummary is now imported here
+# ─────────────────────────────────────────────────────────────
+from backend.schemas import CabinTelemetry, HVACDecision, HeatLoadBreakdown, HVACMode, FleetSummary
 
-def calc_ceiling_solar(irradiance, area_m2, delta_t):
-    if area_m2 <= 0.0 or irradiance < 50.0: return 0.0
-    return max(0.0, U_ROOF_EXPOSED * area_m2 * (delta_t + SOL_AIR_DELTA_T))
+logger = logging.getLogger("mar_hvac.engine")
 
-def calc_floor_conduction(area_m2, internal_temp):
-    if area_m2 <= 0.0: return 0.0
-    return max(0.0, U_DECK_SLAB * area_m2 * (65.0 - internal_temp))
+# ─────────────────────────────────────────────────────────────
+# CONSTANTS: Thermodynamic Engine & Economics
+# ─────────────────────────────────────────────────────────────
+U_VALUE_HULL = 0.5       # W/m2K
+U_VALUE_WINDOW = 2.8     # W/m2K
+SHGC_WINDOW = 0.6        # Solar Heat Gain Coefficient
+METABOLIC_RATE = 115.0   # Watts per person (active seafarer)
+LATENT_HEAT_VAPOR = 2260 # kJ/kg
+AIR_DENSITY = 1.225      # kg/m3
+SPECIFIC_HEAT_AIR = 1.006 # kJ/kgK
 
-def calculate_optimized_load(t: CabinTelemetry) -> HVACDecision:
-    log = [f"=== MAR-HVAC AI — Ship Length: {t.ship_length_m}m ==="]
+# ROI Configuration for GP Pune Pitch Target (12-18 Lakhs)
+INR_PER_KWH = 15.0       # Average commercial/marine generator cost per kWh in ₹
+CO2_KG_PER_KWH = 0.68    # Standard marine diesel emissions factor
+SAILING_DAYS_YR = 300    # Active operational days per year
+
+
+def calculate_optimized_load(telemetry: CabinTelemetry) -> HVACDecision:
+    """Core Edge-AI Logic: Calculates the 11-point thermal load and applies occupancy optimizations."""
+    log = [f"=== MAR-HVAC AI — Cabin {telemetry.cabin_id} ==="]
+    warnings = []
     
-    ext_temp = t.external_temp or (t.internal_temp + 5.0)
-    solar = t.solar_irradiance or 400.0
-    delta_t = ext_temp - t.target_temp
-
-    u_wall = U_HULL_BARE if t.engine_adjacent else U_HULL_INSULATED
-    q_trans = max(0.0, u_wall * (t.cabin_area_m2 * WALL_AREA_FACTOR) * delta_t)
-    q_metabolic = float(t.occupant_count) * METABOLIC_W_PER_PERSON
-    q_equip = t.equipment_wattage
-    q_fenes = max(0.0, solar * t.window_area_m2 * SHGC_WINDOW)
-    q_ceiling = calc_ceiling_solar(solar, t.ceiling_area_exposed_m2, delta_t)
-    q_floor = calc_floor_conduction(t.floor_area_exposed_m2, t.internal_temp)
-    q_engine = ENGINE_RADIANT_W_M2 * t.cabin_area_m2 if t.engine_adjacent else 0.0
-    q_lag = THERMAL_LAG_W_M2 * t.cabin_area_m2 if t.heat_soaked_hull else 0.0
+    # 1. Fallback for Failsafe Mode (If weather API is totally down)
+    ext_temp = telemetry.external_temp if telemetry.external_temp is not None else 32.0
+    solar_irr = telemetry.solar_irradiance if telemetry.solar_irradiance is not None else 400.0
     
-    q_sensible = q_trans + q_metabolic + q_equip + q_fenes + q_ceiling + q_floor + q_engine + q_lag
-    q_total = q_sensible * (LATENT_CORRECTION if t.internal_humidity > 70 else 1.0)
+    delta_t = ext_temp - telemetry.internal_temp
+    if delta_t < 0: delta_t = 0 # Heating is handled separately; focus is cooling load
     
-    mode = HVACMode.FULL_COOLING if t.occupancy else HVACMode.MAINTENANCE_COOLING
-    if not t.occupancy: q_total *= 0.40
+    # ─────────────────────────────────────────────────────────────
+    # THE 11-VARIABLE THERMODYNAMIC MATH
+    # ─────────────────────────────────────────────────────────────
+    # V1: Transmission (Hull/Walls)
+    q_transmission = telemetry.cabin_area_m2 * U_VALUE_HULL * delta_t
+    
+    # V2: Solar (Windows)
+    q_solar = telemetry.window_area_m2 * SHGC_WINDOW * solar_irr if telemetry.direct_sunlight else 0.0
+    
+    # V3: Engine Radiant Heat
+    q_engine = 500.0 if telemetry.engine_adjacent else 0.0
+    
+    # V4: Thermal Lag (Heat-soaked hull from afternoon sun)
+    q_lag = (q_transmission * 0.15) if telemetry.heat_soaked_hull else 0.0
+    
+    # V5: Latent Heat (Humidity extraction)
+    humidity_excess = max(0, telemetry.internal_humidity - 50.0)
+    q_latent = humidity_excess * 10.0 * telemetry.cabin_area_m2
+    
+    # V6: Metabolic (Occupants breathing/moving)
+    occupants = telemetry.occupant_count if telemetry.occupancy else 0
+    q_metabolic = occupants * METABOLIC_RATE
+    
+    # V7: Equipment (Laptops, lights, sensors)
+    q_equipment = telemetry.equipment_wattage if telemetry.occupancy else (telemetry.equipment_wattage * 0.1)
+    
+    # V8: Fenestration/Infiltration (Door drafts)
+    q_fenestration = 0.05 * q_transmission
+    
+    # V9 & V10: Ceiling and Floor Conduction
+    q_ceiling = telemetry.ceiling_area_exposed_m2 * U_VALUE_HULL * delta_t * 0.8
+    q_floor = telemetry.floor_area_exposed_m2 * U_VALUE_HULL * delta_t * 0.5
+    
+    # V11: Total Raw Load
+    q_total_raw_w = (q_transmission + q_solar + q_engine + q_lag + 
+                     q_latent + q_metabolic + q_equipment + 
+                     q_fenestration + q_ceiling + q_floor)
+    
+    baseline_load_kw = q_total_raw_w / 1000.0
+    
+    # ─────────────────────────────────────────────────────────────
+    # AI DECISION TREE & "CHATBOT" LOG GENERATION
+    # ─────────────────────────────────────────────────────────────
+    optimized_load_kw = baseline_load_kw
+    actual_setpoint = telemetry.target_temp
+    mode = HVACMode.FULL_COOLING
+    
+    if not telemetry.occupancy:
+        mode = HVACMode.STANDBY
+        optimized_load_kw *= 0.30 # 70% energy reduction for empty cabins
+        actual_setpoint = 26.0
+        log.append("Occupancy Sensor: Empty. Triggering STANDBY mode.")
+        log.append(f"Setpoint allowed to drift safely to {actual_setpoint}°C to save fuel.")
+    elif ext_temp < telemetry.target_temp:
+        mode = HVACMode.REDUCED_COOLING
+        optimized_load_kw *= 0.50
+        log.append("External weather is optimal. Integrating outside air to reduce compressor load.")
+    else:
+        log.append(f"Occupancy Sensor: Active ({occupants} pax). Full precision cooling engaged.")
 
-    # PITCH WINNER: ROI LOGIC
-    roi = calculate_roi_metrics(q_total / 1000)
+    if telemetry.internal_humidity > 75.0:
+        mode = HVACMode.MOLD_ALERT
+        optimized_load_kw += 0.5 # Extra power allocated for dehumidification
+        warnings.append("WARNING: Mold risk detected. Engaging high-power dehumidification.")
+        log.append("Executing latent heat extraction sequence to protect assets.")
 
-    return HVACDecision(
-        cabin_id=t.cabin_id, mode=mode, optimized_load_kw=round(q_total/1000, 3),
-        setpoint_actual=t.target_temp, energy_saved_percent=60.0 if not t.occupancy else 0.0,
-        weather_source="api_live", decision_log=log,
-        money_saved_hr_inr=roi["hourly_inr"], co2_saved_hr_kg=roi["hourly_co2_kg"], annual_roi_inr=roi["annual_savings_inr"],
-        breakdown=HeatLoadBreakdown(
-            q_transmission=round(q_trans/1000, 3), q_solar=0, q_engine_radiant=round(q_engine/1000, 3),
-            q_thermal_lag=round(q_lag/1000, 3), q_metabolic=round(q_metabolic/1000, 3), q_equipment=round(q_equip/1000, 3),
-            q_fenestration=round(q_fenes/1000, 3), q_ceiling=round(q_ceiling/1000, 3), q_floor_conduction=round(q_floor/1000, 3),
-            q_latent=round((q_total-q_sensible)/1000, 3), q_total_raw=round(q_total/1000, 3)
-        )
+    optimized_load_kw = max(0.1, optimized_load_kw) # Prevent impossible zero values
+    
+    # ─────────────────────────────────────────────────────────────
+    # ROI & CO2 CALCULATOR (Outputting to ₹ for Dashboard)
+    # ─────────────────────────────────────────────────────────────
+    energy_saved_kw = baseline_load_kw - optimized_load_kw
+    if energy_saved_kw < 0: energy_saved_kw = 0
+    
+    energy_saved_percent = (energy_saved_kw / baseline_load_kw * 100) if baseline_load_kw > 0 else 0
+    
+    money_saved_hr = energy_saved_kw * INR_PER_KWH
+    co2_saved_hr = energy_saved_kw * CO2_KG_PER_KWH
+    annual_roi = money_saved_hr * 24 * SAILING_DAYS_YR
+    
+    log.append(f"Calculation complete: Reduced energy waste by {energy_saved_percent:.1f}%.")
+
+    # Construct Response
+    breakdown = HeatLoadBreakdown(
+        q_transmission=q_transmission, q_solar=q_solar, q_engine_radiant=q_engine,
+        q_thermal_lag=q_lag, q_latent=q_latent, q_metabolic=q_metabolic,
+        q_equipment=q_equipment, q_fenestration=q_fenestration,
+        q_ceiling=q_ceiling, q_floor_conduction=q_floor,
+        q_total_raw=q_total_raw_w, heating_load_kw=0.0
     )
 
-def calculate_fleet_summary(cabin_list: list[CabinTelemetry]):
-    decisions = [calculate_optimized_load(c) for c in cabin_list]
-    total_load = sum(d.optimized_load_kw for d in decisions)
-    total_savings = sum(d.annual_roi_inr for d in decisions)
+    return HVACDecision(
+        cabin_id=telemetry.cabin_id,
+        mode=mode,
+        optimized_load_kw=round(optimized_load_kw, 2),
+        setpoint_actual=actual_setpoint,
+        energy_saved_percent=round(energy_saved_percent, 1),
+        breakdown=breakdown,
+        decision_log=log,
+        warnings=warnings,
+        weather_source="cache" if telemetry.external_temp is None else "live",
+        dew_point=telemetry.internal_temp - ((100 - telemetry.internal_humidity)/5), # Approximation
+        money_saved_hr_inr=round(money_saved_hr, 2),
+        co2_saved_hr_kg=round(co2_saved_hr, 2),
+        annual_roi_inr=round(annual_roi, 2)
+    )
+
+def calculate_fleet_summary(cabin_list: List[CabinTelemetry]) -> FleetSummary:
+    """Aggregates all cabin data to create ship-wide ROI and CO2 metrics."""
+    total_load = 0.0
+    total_savings = 0.0
+    total_co2 = 0.0
+    occupied_count = 0
+    decisions = []
+
+    for cabin in cabin_list:
+        decision = calculate_optimized_load(cabin)
+        decisions.append(decision)
+        total_load += decision.optimized_load_kw
+        total_savings += decision.annual_roi_inr
+        
+        # Scale CO2 to Annual Metric Tons
+        annual_co2_kg = decision.co2_saved_hr_kg * 24 * SAILING_DAYS_YR
+        total_co2 += (annual_co2_kg / 1000.0) 
+        
+        if cabin.occupancy:
+            occupied_count += 1
+
     return FleetSummary(
-        total_cabins=len(cabin_list), occupied_cabins=sum(1 for c in cabin_list if c.occupancy),
-        total_load_kw=round(total_load, 2), total_annual_savings_inr=round(total_savings, 2),
-        total_annual_co2_tons=round((total_savings / 14.20 * 0.68) / 1000, 2), cabins=decisions
+        total_cabins=len(cabin_list),
+        occupied_cabins=occupied_count,
+        total_load_kw=round(total_load, 2),
+        total_annual_savings_inr=round(total_savings, 2),
+        total_annual_co2_tons=round(total_co2, 2),
+        cabins=decisions
     )

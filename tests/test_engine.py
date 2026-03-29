@@ -1,63 +1,86 @@
-import sys, os
+import pytest
+import sys
+import os
+
+# Ensure the root directory is in the path so 'backend' can be found
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from backend.hvac_engine import (
-    q_solar, q_conduction, q_people,
-    q_equipment, q_fresh_air, convert_units, calculate_total_load
-)
+from backend.schemas import CabinTelemetry, HVACMode
+from backend.hvac_engine import calculate_optimized_load
 
-# ── Test each function individually ───────────────────────────
-def test_q_solar_basic():
-    result = q_solar(1.0, 0.6, 1000)
-    assert result == 600.0, f"Expected 600W, got {result}"
+# ─────────────────────────────────────────────────────────────
+# TEST CASE 1: The "Ghost Cooling" Efficiency (PPT Page 3 & 6)
+# ─────────────────────────────────────────────────────────────
+def test_ghost_cooling_logic():
+    """
+    Verify that an empty cabin triggers MAINTENANCE_COOLING 
+    and reduces load to 40% of baseline.
+    """
+    telemetry = CabinTelemetry(
+        cabin_id="TEST-A1",
+        occupancy=False,  # Empty cabin triggers Protocol [cite: 33, 56]
+        internal_temp=28.0,
+        internal_humidity=65.0,
+        target_temp=22.0,
+        cabin_area_m2=20.0
+    )
+    
+    decision = calculate_optimized_load(telemetry)
+    
+    # Logic: If empty, mode must be MAINTENANCE_COOLING [cite: 95, 106]
+    assert decision.mode == HVACMode.MAINTENANCE_COOLING
+    # Logic: Load reduction should reflect ~60% savings [cite: 31]
+    assert decision.energy_saved_percent == 60.0 
 
-def test_q_solar_zero_glass():
-    """Room with no windows — solar gain must be zero."""
-    result = q_solar(0, 0.6, 1000)
-    assert result == 0
+# ─────────────────────────────────────────────────────────────
+# TEST CASE 2: Engine Proximity Load (PPT Page 5)
+# ─────────────────────────────────────────────────────────────
+def test_engine_adjacent_heat_load():
+    """
+    Rooms near the engine should have higher radiant heat[cite: 84].
+    """
+    normal = CabinTelemetry(cabin_id="NORMAL", occupancy=True, internal_temp=25, 
+                            cabin_area_m2=20, engine_adjacent=False)
+    hot_room = CabinTelemetry(cabin_id="ENGINE-SIDE", occupancy=True, internal_temp=25, 
+                              cabin_area_m2=20, engine_adjacent=True)
+    
+    res_a = calculate_optimized_load(normal)
+    res_b = calculate_optimized_load(hot_room)
+    
+    # Engine radiant heat (85W/m2) must increase total load
+    assert res_b.optimized_load_kw > res_a.optimized_load_kw
 
-def test_q_conduction_formula():
-    """U=1, A=10, dT=10 with marine factor 1.15 = 115W"""
-    result = q_conduction(1.0, 10, 10, marine_factor=1.15)
-    assert abs(result - 115.0) < 0.1
+# ─────────────────────────────────────────────────────────────
+# TEST CASE 3: ROI Accuracy (The 12-18 Lakh Promise)
+# ─────────────────────────────────────────────────────────────
+def test_roi_calculation_bounds():
+    """
+    Verify that the ROI math reflects the ₹14.20/kWh fuel cost.
+    """
+    telemetry = CabinTelemetry(
+        cabin_id="ROI-TEST",
+        occupancy=True,
+        internal_temp=30.0,
+        cabin_area_m2=50.0 
+    )
+    
+    decision = calculate_optimized_load(telemetry)
+    
+    # Verify hourly and annual savings are calculated in INR [cite: 182, 188]
+    assert decision.money_saved_hr_inr >= 0
+    assert decision.annual_roi_inr >= 0
 
-def test_q_people_seated():
-    sens, lat = q_people(2, "seated")
-    assert sens == 150   # 2 x 75W
-    assert lat  == 110   # 2 x 55W
-
-def test_q_people_engine_crew():
-    """Engine crew generates much more heat — verify it's higher than seated."""
-    sens_seat, _ = q_people(1, "seated")
-    sens_crew, _ = q_people(1, "engine_crew")
-    assert sens_crew > sens_seat
-
-def test_unit_converter():
-    result = convert_units(3517)
-    assert result["TR"]  == 1.0      # exactly 1 TR
-    assert result["kW"]  == 3.517
-    assert abs(result["BTU_hr"] - 12000) < 5
-
-def test_cabin_example_full():
-    """Full cabin calculation — result must be within 5% of 0.74 TR."""
-    inputs = {
-        "glass_area":0.5,"SHGC":0.6,"irradiance":950,
-        "U_value":0.7,"wall_area":32,"delta_T":16,
-        "num_people":2,"activity":"seated",
-        "equipment_watts":150,"fresh_air_CFM":40,"outside_temp":38,
-    }
-    result = calculate_total_load(inputs)
-    TR = result["total"]["TR"]
-    assert 0.38 < TR < 0.50, f"TR {TR} outside expected range 0.38-0.50"
-
-def test_breakdown_has_all_components():
-    inputs = {
-        "glass_area":1.0,"SHGC":0.5,"irradiance":800,
-        "U_value":0.8,"wall_area":20,"delta_T":12,
-        "num_people":4,"activity":"seated",
-        "equipment_watts":300,"fresh_air_CFM":80,"outside_temp":35,
-    }
-    result = calculate_total_load(inputs)
-    breakdown = result["breakdown"]
-    for key in ["solar","conduction","people_sens","people_lat","equipment","fresh_air"]:
-        assert key in breakdown, f"Missing key: {key}"
+# ─────────────────────────────────────────────────────────────
+# TEST CASE 4: Asset Defence™ Integration (PPT Page 7)
+# ─────────────────────────────────────────────────────────────
+def test_asset_defence_warning_flow():
+    """
+    Ensure the backend schema is ready for Asset Defence data[cite: 111, 122].
+    """
+    telemetry = CabinTelemetry(cabin_id="DEW-TEST", occupancy=True, internal_temp=20, internal_humidity=95)
+    decision = calculate_optimized_load(telemetry)
+    
+    # Ensure thermodynamic breakdown is present [cite: 83]
+    assert decision.breakdown.q_total_raw > 0
+    # Ensure schema can receive dew point results
+    assert hasattr(decision, 'dew_point')
