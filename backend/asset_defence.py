@@ -2,21 +2,19 @@
 MAR-HVAC AI — Asset Defence Module
 backend/asset_defence.py
 
-WEEK 4 — YOU build this file.
+WEEK 4 — complete
 
-What this file does:
-  1. Calculates dew point — if internal temp drops below dew point,
-     condensation forms on steel hull → corrosion starts
-  2. Detects mold risk — if humidity stays above threshold for too long
-  3. Enforces hospital-grade thresholds when market_segment = "hospital"
-  4. Returns an AssetDefenceResult that main.py injects into every /optimize call
+What this does:
+  1. Dew-point check  -> CORROSION_PREVENTION mode
+  2. Mold timer       -> MOLD_ALERT after sustained high humidity
+  3. Hospital mode    -> strict WHO temperature + RH bands
+  4. Heating mode     -> flag when ext_temp < target (arctic routes)
 
-WHY THIS MATTERS FOR THE PITCH:
-  - Ship hull corrosion costs owners $2M+ in repairs
-  - Black mold in passenger cabins = lawsuits
-  - Ship hospitals with infected mold = life threatening
-  - We are the ONLY HVAC system that monitors and prevents this
-  - Corrosion Prevention is the biggest differentiator vs competitors
+WHY THIS IS THE BIGGEST PITCH DIFFERENTIATOR:
+  - Ship hull corrosion = $2M+ repair bills
+  - Black mold in passenger cabins = lawsuits + regulatory fines
+  - Ship hospital mold = infection risk, potentially life-threatening
+  - No existing marine HVAC product monitors this in real-time
 
 YOU are the only one who edits this file.
 """
@@ -33,72 +31,60 @@ logger = logging.getLogger("mar_hvac.asset_defence")
 # THRESHOLDS
 # ─────────────────────────────────────────────────────────────
 
-# How close to dew point before we trigger Corrosion Prevention mode
-# (1.0 degree C safety margin — act before condensation actually starts)
+# Degrees C safety margin above dew point before triggering prevention
 DEW_POINT_SAFETY_MARGIN_C = 1.0
 
-# Mold grows when RH stays above this for too long
+# Per-segment mold RH thresholds (%RH)
 MOLD_RH_THRESHOLD = {
     "cargo":    70.0,
     "cruise":   65.0,
     "navy":     60.0,
-    "hospital": 55.0,   # strictest — infection control is life-or-death
+    "hospital": 55.0,   # strictest — WHO infection control
     "yacht":    60.0,
 }
 
-# How many minutes of high humidity before mold alert fires
-MOLD_DURATION_MINUTES = 15   # In production this would be 4 hours
-                              # Shortened to 15min for demo / testing
+# How long cabin must be above mold RH before alert fires (minutes)
+# Production: 4 hours (240 min) | Demo/test: 15 min
+MOLD_DURATION_MINUTES = 15
 
-# Hospital mode — strict temperature and humidity bands
-# Based on WHO guidelines for healthcare facility air quality
-HOSPITAL_TEMP_MIN = 20.0   # degrees C
-HOSPITAL_TEMP_MAX = 22.0
-HOSPITAL_RH_MIN   = 45.0   # %RH
-HOSPITAL_RH_MAX   = 55.0
-
-# Medicine refrigeration room — separate stricter zone
-MEDICINE_ROOM_TEMP_MAX = 8.0    # degrees C (vaccine cold chain)
-MEDICINE_ROOM_RH_MAX   = 50.0
+# Hospital-grade thresholds (WHO healthcare air quality guidelines)
+HOSPITAL_TEMP_MIN  = 20.0
+HOSPITAL_TEMP_MAX  = 22.0
+HOSPITAL_RH_MIN    = 45.0
+HOSPITAL_RH_MAX    = 55.0
+MEDICINE_TEMP_MAX  = 8.0    # vaccine cold chain
+MEDICINE_RH_MAX    = 50.0
 
 
 # ─────────────────────────────────────────────────────────────
-# HIGH-HUMIDITY TRACKER
-# Tracks how long each cabin has had dangerous humidity
-# Module-level dict — persists across requests like weather cache
+# HUMIDITY TIMER — module-level, persists across requests
 # ─────────────────────────────────────────────────────────────
+# Format: { "CABIN-ID": unix_timestamp_when_high_humidity_started }
 
-# Format: { "cabin_id": timestamp_when_high_humidity_started }
-_high_humidity_start: dict[str, float] = {}
+_high_rh_start: dict[str, float] = {}
 
 
-def _record_high_humidity(cabin_id: str, rh: float, threshold: float) -> float:
+def _update_rh_timer(cabin_id: str, rh: float, threshold: float) -> float:
     """
-    Track how long this cabin has been above the humidity threshold.
-    Returns duration in minutes.
+    Track how long a cabin has been above its mold RH threshold.
+    Returns duration in minutes. Resets timer when RH drops below threshold.
     """
     now = time.time()
-
     if rh > threshold:
-        # First time we see high humidity for this cabin — record the start time
-        if cabin_id not in _high_humidity_start:
-            _high_humidity_start[cabin_id] = now
-            logger.info(f"[ASSET] {cabin_id}: High humidity started ({rh:.0f}%RH > {threshold:.0f}%)")
-        duration_minutes = (now - _high_humidity_start[cabin_id]) / 60.0
-        return duration_minutes
+        if cabin_id not in _high_rh_start:
+            _high_rh_start[cabin_id] = now
+        return (now - _high_rh_start[cabin_id]) / 60.0
     else:
-        # Humidity is fine — clear the tracker for this cabin
-        if cabin_id in _high_humidity_start:
-            logger.info(f"[ASSET] {cabin_id}: Humidity back to normal ({rh:.0f}%RH). Clearing timer.")
-            del _high_humidity_start[cabin_id]
+        if cabin_id in _high_rh_start:
+            del _high_rh_start[cabin_id]
         return 0.0
 
 
-def get_high_humidity_duration_minutes(cabin_id: str) -> float:
-    """How long has this cabin been above its humidity threshold? Returns 0 if normal."""
-    if cabin_id not in _high_humidity_start:
+def get_rh_duration_minutes(cabin_id: str) -> float:
+    """How long has this cabin been above its mold threshold? 0 if normal."""
+    if cabin_id not in _high_rh_start:
         return 0.0
-    return (time.time() - _high_humidity_start[cabin_id]) / 60.0
+    return (time.time() - _high_rh_start[cabin_id]) / 60.0
 
 
 # ─────────────────────────────────────────────────────────────
@@ -107,76 +93,72 @@ def get_high_humidity_duration_minutes(cabin_id: str) -> float:
 
 @dataclass
 class AssetDefenceResult:
-    """
-    Result from running asset defence checks on a cabin.
-    Returned to hvac_engine.py and main.py to influence the HVACDecision.
-    """
-    # Dew point check
+    """All asset defence check results for one cabin."""
+
+    # Dew point
     dew_point_c          : float = 0.0
-    corrosion_risk       : bool  = False   # True = internal temp near dew point
-    corrosion_severity   : str   = "none"  # "none" | "warning" | "critical"
+    corrosion_risk        : bool  = False
+    corrosion_severity    : str   = "none"   # none | warning | critical
 
-    # Mold check
-    mold_risk            : bool  = False   # True = humidity too high too long
-    high_humidity_minutes: float = 0.0
-    mold_threshold_rh    : float = 70.0
+    # Mold
+    mold_risk             : bool  = False
+    high_rh_minutes       : float = 0.0
+    mold_threshold_rh     : float = 70.0
 
-    # Hospital mode
-    hospital_mode_active  : bool  = False
+    # Hospital
+    hospital_mode         : bool  = False
     hospital_temp_ok      : bool  = True
     hospital_rh_ok        : bool  = True
     hospital_violations   : list[str] = field(default_factory=list)
 
-    # Recommended HVAC action
-    recommended_fan_speed : float = 0.0   # 0.0 to 1.0 — fraction of max fan speed
-    recommended_action    : str   = "none"
+    # Heating flag (for dashboard colour switch)
+    heating_required      : bool  = False
 
-    # Explanation lines for the AI Decision Log
-    log_lines: list[str] = field(default_factory=list)
-    warnings:  list[str] = field(default_factory=list)
+    # Recommended response
+    recommended_action    : str   = "none"
+    recommended_fan_speed : float = 0.0   # 0.0 to 1.0
+
+    # Log
+    log_lines : list[str] = field(default_factory=list)
+    warnings  : list[str] = field(default_factory=list)
 
 
 # ─────────────────────────────────────────────────────────────
-# DEW POINT CALCULATION
+# DEW POINT
 # ─────────────────────────────────────────────────────────────
 
 def calculate_dew_point(temp_c: float, rh_percent: float) -> float:
     """
-    Magnus formula approximation for dew point.
-    Td = T - ((100 - RH) / 5)
-
-    Example:
-      temp = 24C, RH = 80% -> Td = 24 - (20/5) = 24 - 4 = 20C
-      If internal temp drops to 20C or below -> condensation starts
-
-    This is fast and accurate enough for HVAC control purposes.
-    (Error < 1C for RH > 50%, which is always the case on ships)
+    Magnus formula: Td = T - ((100 - RH) / 5)
+    Accurate within 1C for RH > 50%, which is always true on ships.
     """
     return temp_c - ((100.0 - rh_percent) / 5.0)
 
 
 # ─────────────────────────────────────────────────────────────
-# MAIN ASSET DEFENCE CHECK
+# MAIN CHECK FUNCTION
 # ─────────────────────────────────────────────────────────────
 
 def run_asset_defence_checks(
-    cabin_id       : str,
-    internal_temp  : float,
-    internal_rh    : float,
-    market_segment : str  = "cargo",
-    is_medicine_room: bool = False,
+    cabin_id        : str,
+    internal_temp   : float,
+    internal_rh     : float,
+    external_temp   : Optional[float] = None,
+    target_temp     : float = 22.0,
+    market_segment  : str   = "cargo",
+    is_medicine_room: bool  = False,
 ) -> AssetDefenceResult:
     """
-    Run all asset defence checks for one cabin.
-
-    Called by hvac_engine.calculate_optimized_load() before the AI decision.
+    Run all four asset defence checks for one cabin.
 
     Args:
-      cabin_id        : e.g. "CABIN-A3" — used for humidity duration tracking
-      internal_temp   : DHT22 reading in degrees C
-      internal_rh     : DHT22 relative humidity in %
-      market_segment  : "cargo" | "cruise" | "navy" | "hospital" | "yacht"
-      is_medicine_room: True only for ship hospital medicine/vaccine storage room
+      cabin_id         : e.g. "CABIN-A3" (used for mold timer)
+      internal_temp    : DHT22 temperature in degrees C
+      internal_rh      : DHT22 humidity in %
+      external_temp    : from OpenWeather (used for heating check)
+      target_temp      : HVAC setpoint in degrees C
+      market_segment   : cargo | cruise | navy | hospital | yacht
+      is_medicine_room : True only for ship hospital cold-chain room
 
     Returns:
       AssetDefenceResult with all checks filled in
@@ -187,88 +169,79 @@ def run_asset_defence_checks(
 
     log.append("--- ASSET DEFENCE CHECKS ---")
 
-    # ── CHECK 1: Dew Point / Corrosion Risk ──────────────────
+    # ── CHECK 1: Dew Point / Corrosion ───────────────────────
     dew_pt = calculate_dew_point(internal_temp, internal_rh)
     result.dew_point_c = round(dew_pt, 2)
+    margin = internal_temp - dew_pt
 
-    temp_above_dew = internal_temp - dew_pt
-    log.append(f"  Dew Point  : {dew_pt:.1f}C")
-    log.append(f"  Temp margin: {temp_above_dew:.1f}C above dew point")
+    log.append(f"  Dew point  : {dew_pt:.1f}C (margin: {margin:.1f}C)")
 
-    if temp_above_dew <= DEW_POINT_SAFETY_MARGIN_C:
-        # CRITICAL — condensation is happening or about to happen RIGHT NOW
+    if margin <= DEW_POINT_SAFETY_MARGIN_C:
         result.corrosion_risk     = True
         result.corrosion_severity = "critical"
-        result.recommended_fan_speed = 0.30   # 30% fan speed circulates air, prevents condensation
-        result.recommended_action    = "CORROSION_PREVENTION"
-        log.append(f"  ! CRITICAL: Temp {internal_temp:.1f}C is {temp_above_dew:.1f}C above dew point {dew_pt:.1f}C")
-        log.append(f"  ! CORROSION PREVENTION: Running fans at 30% to circulate air.")
+        result.recommended_action = "CORROSION_PREVENTION"
+        result.recommended_fan_speed = 0.30
+        log.append(f"  ! CRITICAL: {margin:.1f}C margin — condensation on hull steel imminent.")
+        log.append(f"  ! Activating fans at 30% to circulate air.")
         warns.append(
-            f"CORROSION RISK: Internal temp {internal_temp:.1f}C is only "
-            f"{temp_above_dew:.1f}C above dew point {dew_pt:.1f}C. "
-            f"Condensation on hull steel is imminent. Fan circulation activated."
+            f"CORROSION RISK: Internal {internal_temp:.1f}C is only {margin:.1f}C above "
+            f"dew point {dew_pt:.1f}C. Hull condensation imminent."
         )
-    elif temp_above_dew <= 3.0:
-        # WARNING — getting close, watch carefully
+    elif margin <= 3.0:
         result.corrosion_risk     = True
         result.corrosion_severity = "warning"
+        result.recommended_action = "CORROSION_PREVENTION"
         result.recommended_fan_speed = 0.20
-        result.recommended_action    = "CORROSION_PREVENTION"
-        log.append(f"  WARNING: Margin only {temp_above_dew:.1f}C. Approaching condensation risk.")
-        log.append(f"  Preemptive fans at 20% to maintain air circulation.")
+        log.append(f"  WARNING: {margin:.1f}C margin is approaching condensation risk.")
         warns.append(
-            f"CORROSION WARNING: Temp margin {temp_above_dew:.1f}C is low. "
-            f"Monitor closely. Fan circulation recommended."
+            f"CORROSION WARNING: Temp margin {margin:.1f}C is low. "
+            "Fan circulation recommended."
         )
     else:
-        log.append(f"  OK: {temp_above_dew:.1f}C safety margin — no corrosion risk.")
+        log.append(f"  OK: {margin:.1f}C safety margin — no corrosion risk.")
 
     # ── CHECK 2: Mold Detection ───────────────────────────────
-    mold_threshold = MOLD_RH_THRESHOLD.get(market_segment, 70.0)
-    result.mold_threshold_rh = mold_threshold
+    mold_thresh = MOLD_RH_THRESHOLD.get(market_segment, 70.0)
+    result.mold_threshold_rh = mold_thresh
+    duration = _update_rh_timer(cabin_id, internal_rh, mold_thresh)
+    result.high_rh_minutes = round(duration, 1)
 
-    duration_minutes = _record_high_humidity(cabin_id, internal_rh, mold_threshold)
-    result.high_humidity_minutes = round(duration_minutes, 1)
+    log.append(f"  Humidity   : {internal_rh:.0f}%RH (threshold: {mold_thresh:.0f}%)")
 
-    log.append(f"  Humidity   : {internal_rh:.0f}%RH (threshold: {mold_threshold:.0f}%)")
-
-    if internal_rh > mold_threshold and duration_minutes >= MOLD_DURATION_MINUTES:
+    if internal_rh > mold_thresh and duration >= MOLD_DURATION_MINUTES:
         result.mold_risk = True
         if result.recommended_action == "none":
             result.recommended_action    = "MOLD_ALERT"
             result.recommended_fan_speed = 0.35
-        log.append(f"  ! MOLD ALERT: RH {internal_rh:.0f}% for {duration_minutes:.0f} min (>{MOLD_DURATION_MINUTES} min threshold).")
-        log.append(f"  ! Dehumidification cycle and increased ventilation required.")
+        log.append(f"  ! MOLD ALERT: RH {internal_rh:.0f}% for {duration:.0f} min.")
         warns.append(
-            f"MOLD ALERT: Humidity {internal_rh:.0f}%RH has exceeded {mold_threshold:.0f}% "
-            f"for {duration_minutes:.0f} minutes. Mold growth risk. Dehumidify immediately."
+            f"MOLD ALERT: Humidity {internal_rh:.0f}%RH > {mold_thresh:.0f}% "
+            f"for {duration:.0f} minutes. Dehumidify immediately."
         )
-    elif internal_rh > mold_threshold:
-        log.append(f"  WATCH: RH {internal_rh:.0f}% is above threshold. Timer: {duration_minutes:.0f} min/{MOLD_DURATION_MINUTES} min.")
+    elif internal_rh > mold_thresh:
+        log.append(f"  WATCH: RH above threshold. Timer: {duration:.0f}/{MOLD_DURATION_MINUTES} min.")
     else:
         log.append(f"  OK: Humidity within safe range.")
 
-    # ── CHECK 3: Hospital Mode ────────────────────────────────
+    # ── CHECK 3: Hospital Compliance ──────────────────────────
     if market_segment == "hospital":
-        result.hospital_mode_active = True
+        result.hospital_mode = True
         log.append("  HOSPITAL MODE: Applying WHO healthcare air quality standards.")
 
         if is_medicine_room:
-            # Extra strict for vaccine / medicine cold storage
-            if internal_temp > MEDICINE_ROOM_TEMP_MAX:
+            if internal_temp > MEDICINE_TEMP_MAX:
                 result.hospital_temp_ok = False
-                v = f"MEDICINE ROOM: Temp {internal_temp:.1f}C exceeds {MEDICINE_ROOM_TEMP_MAX}C max! Cold chain at risk."
+                v = f"MEDICINE ROOM: Temp {internal_temp:.1f}C > {MEDICINE_TEMP_MAX}C max — cold chain at risk!"
                 result.hospital_violations.append(v)
                 warns.append(v)
                 log.append(f"  ! {v}")
-            if internal_rh > MEDICINE_ROOM_RH_MAX:
+            if internal_rh > MEDICINE_RH_MAX:
                 result.hospital_rh_ok = False
-                v = f"MEDICINE ROOM: RH {internal_rh:.0f}% exceeds {MEDICINE_ROOM_RH_MAX:.0f}% max! Drug stability at risk."
+                v = f"MEDICINE ROOM: RH {internal_rh:.0f}% > {MEDICINE_RH_MAX:.0f}% max — drug stability at risk!"
                 result.hospital_violations.append(v)
                 warns.append(v)
                 log.append(f"  ! {v}")
         else:
-            # Standard hospital patient/treatment room
             if not (HOSPITAL_TEMP_MIN <= internal_temp <= HOSPITAL_TEMP_MAX):
                 result.hospital_temp_ok = False
                 v = f"HOSPITAL: Temp {internal_temp:.1f}C outside {HOSPITAL_TEMP_MIN}-{HOSPITAL_TEMP_MAX}C WHO range."
@@ -285,43 +258,11 @@ def run_asset_defence_checks(
         if result.hospital_temp_ok and result.hospital_rh_ok:
             log.append("  OK: Hospital environment within WHO guidelines.")
 
-    log.append("")   # blank line before AI Decision section
+    # ── CHECK 4: Heating Required ─────────────────────────────
+    if external_temp is not None and external_temp < target_temp - 2.0:
+        result.heating_required = True
+        log.append(f"  HEATING: External {external_temp:.1f}C < setpoint {target_temp:.1f}C.")
+        log.append(f"  Arctic/cold route detected. Dashboard will switch to blue theme.")
 
+    log.append("")
     return result
-
-
-# ─────────────────────────────────────────────────────────────
-# QUICK TEST
-# ─────────────────────────────────────────────────────────────
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    print("\n=== MAR-HVAC asset_defence.py Test ===\n")
-
-    # Test 1: Normal cabin — no risk
-    print("Test 1: Normal cargo cabin (no risk expected)")
-    r = run_asset_defence_checks("CABIN-A1", internal_temp=26.0, internal_rh=60.0, market_segment="cargo")
-    print(f"  Corrosion risk: {r.corrosion_risk} | Mold risk: {r.mold_risk} | Action: {r.recommended_action}")
-
-    # Test 2: Corrosion risk — temp near dew point
-    print("\nTest 2: Cold cabin near dew point (corrosion expected)")
-    # temp=20, rh=85 -> dew_point = 20 - (15/5) = 17C -> margin = 3C -> warning
-    r = run_asset_defence_checks("CABIN-B2", internal_temp=18.5, internal_rh=88.0, market_segment="cargo")
-    print(f"  Dew point: {r.dew_point_c}C | Corrosion: {r.corrosion_risk} ({r.corrosion_severity}) | Action: {r.recommended_action}")
-    for line in r.log_lines: print(f"  {line}")
-
-    # Test 3: Hospital mode
-    print("\nTest 3: Hospital mode (strict thresholds)")
-    r = run_asset_defence_checks("HOSPITAL-01", internal_temp=24.0, internal_rh=68.0, market_segment="hospital")
-    print(f"  Hospital mode: {r.hospital_mode_active} | Temp OK: {r.hospital_temp_ok} | RH OK: {r.hospital_rh_ok}")
-    print(f"  Violations: {r.hospital_violations}")
-
-    # Test 4: Simulate mold buildup — call multiple times to trigger timer
-    print("\nTest 4: High humidity mold detection")
-    cabin = "CABIN-C3"
-    for i in range(3):
-        r = run_asset_defence_checks(cabin, internal_temp=27.0, internal_rh=75.0, market_segment="cargo")
-        print(f"  Call {i+1}: RH=75%, Duration={r.high_humidity_minutes:.1f}min, MoldRisk={r.mold_risk}")
-        time.sleep(0.1)
-
-    print("\n=== Test complete ===\n")

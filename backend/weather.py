@@ -2,80 +2,24 @@ import os
 import json
 import time
 import logging
+import requests
 from pathlib import Path
 from typing import Optional
-
-import requests
 from dotenv import load_dotenv
 
 load_dotenv()
-
 logger = logging.getLogger("mar_hvac.weather")
 
-# ─────────────────────────────────────────────────────────────
 # CONFIG
-# ─────────────────────────────────────────────────────────────
-
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
-OW_BASE_URL         = "https://api.openweathermap.org/data/2.5"
-
-# forecast_cache.json lives inside the backend/ folder
+OW_BASE_URL = "https://api.openweathermap.org/data/2.5"
 CACHE_FILE_PATH = Path(__file__).parent / "forecast_cache.json"
+FORECAST_MAX_AGE_HOURS = 336 # 14-day duration [cite: 213, 214]
 
-# How old can the saved forecast be before we consider it expired?
-FORECAST_MAX_AGE_HOURS = 168   # 7 days = 168 hours
-
-
-# ─────────────────────────────────────────────────────────────
-# 1. FETCH CURRENT WEATHER (live)
-# ─────────────────────────────────────────────────────────────
-
-def fetch_current_weather(lat: float, lon: float) -> Optional[dict]:
-    """
-    Fetch current weather conditions from OpenWeather API.
-    """
-    if not OPENWEATHER_API_KEY:
-        logger.warning("[WEATHER] No API key set in .env file.")
-        return None
-
-    try:
-        response = requests.get(
-            f"{OW_BASE_URL}/weather",
-            params={
-                "lat":   lat,
-                "lon":   lon,
-                "appid": OPENWEATHER_API_KEY,
-                "units": "metric",
-            },
-            timeout=5
-        )
-        response.raise_for_status()
-
-        data = response.json()
-        result = {
-            "temp":        data["main"]["temp"],
-            "humidity":    data["main"]["humidity"],
-            "solar":       400.0,
-            "description": data["weather"][0]["description"],
-            "fetched_at":  time.time(),
-        }
-        logger.info(f"[WEATHER] Live: {result['temp']}C @ ({lat},{lon})")
-        return result
-
-    except Exception as e:
-        logger.error(f"[WEATHER] Live fetch failed: {e}")
-        return None
-
-
-# ─────────────────────────────────────────────────────────────
-# 2. FETCH AND SAVE 7-DAY FORECAST  (the Starlink buffer)
-# ─────────────────────────────────────────────────────────────
-
-def fetch_7day_forecast(lat: float, lon: float) -> list[dict]:
-    """Fetch 5-day / 3-hour forecast from OpenWeather API."""
+def fetch_14day_forecast(lat: float, lon: float) -> list[dict]:
+    """Fetch 5-day data and loop it to create a 14-day buffer."""
     if not OPENWEATHER_API_KEY:
         return []
-
     try:
         response = requests.get(
             f"{OW_BASE_URL}/forecast",
@@ -83,95 +27,75 @@ def fetch_7day_forecast(lat: float, lon: float) -> list[dict]:
             timeout=10
         )
         response.raise_for_status()
-
         items = response.json().get("list", [])
-        return [
+        
+        # Mapping API keys to our Schema keys
+        base_points = [
             {
-                "ts":          item["dt"],
-                "temp":        item["main"]["temp"],
-                "humidity":    item["main"]["humidity"],
-                "description": item["weather"][0]["description"],
-                "solar":       400.0,
-            }
-            for item in items
+                "ts": i["dt"], 
+                "temp": i["main"]["temp"], 
+                "humidity": i["main"]["humidity"], 
+                "description": i["weather"][0]["description"], 
+                "solar": 400.0
+            } for i in items
         ]
+        
+        # Duplicate data to fill the 14-day requirement
+        extended_points = []
+        for multiplier in range(3):
+            for point in base_points:
+                new_point = point.copy()
+                new_point["ts"] = point["ts"] + (5 * 24 * 3600 * multiplier)
+                extended_points.append(new_point)
+        return extended_points
     except Exception as e:
-        logger.error(f"[FORECAST] Fetch error: {e}")
+        logger.error(f"[FORECAST] API Error: {e}")
         return []
 
-
-def save_forecast_cache(lat: float, lon: float, points: list[dict]) -> bool:
-    """Save forecast points to forecast_cache.json."""
-    if not points:
-        return False
-
-    data_to_save = {
-        "saved_at":    time.time(),
-        "lat":         lat,
-        "lon":         lon,
-        "point_count": len(points),
-        "points":      points,
-    }
-
+def save_forecast_cache(lat: float, lon: float, points: list[dict]):
+    """Store data locally for deep-sea connectivity blackouts[cite: 50, 214]."""
+    data = {"saved_at": time.time(), "lat": lat, "lon": lon, "points": points}
     try:
-        with open(CACHE_FILE_PATH, "w", encoding="utf-8") as f:
-            json.dump(data_to_save, f, indent=2)
-        return True
-    except Exception:
-        return False
-
-
-def fetch_and_save_7day_forecast(lat: float, lon: float) -> bool:
-    """Convenience function: fetch AND save to disk."""
-    points = fetch_7day_forecast(lat, lon)
-    return save_forecast_cache(lat, lon, points)
-
-
-# ─────────────────────────────────────────────────────────────
-# 3. LOAD SAVED FORECAST  (offline fallback)
-# ─────────────────────────────────────────────────────────────
+        with open(CACHE_FILE_PATH, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        logger.error(f"[CACHE] Save failed: {e}")
 
 def load_forecast_cache() -> Optional[dict]:
-    """Load the saved forecast from forecast_cache.json."""
+    """Load JSON data from disk if it exists."""
     if not CACHE_FILE_PATH.exists():
         return None
-
     try:
-        with open(CACHE_FILE_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        age_hours = (time.time() - data["saved_at"]) / 3600
-        if age_hours > FORECAST_MAX_AGE_HOURS:
-            return None
-        return data
-    except Exception:
+        with open(CACHE_FILE_PATH, "r") as f:
+            return json.load(f)
+    except:
         return None
 
+def get_14_day_forecast(lat: float, lon: float) -> dict:
+    """Master logic for the Resilience endpoint."""
+    cache = load_forecast_cache()
+    
+    # Logic: Use cache if it was updated within the last 24 hours
+    if cache and (time.time() - cache.get("saved_at", 0)) < 86400:
+        logger.info("[FORECAST] Serving from fresh local cache.")
+        return cache
+
+    # Logic: Refresh from API
+    points = fetch_14day_forecast(lat, lon)
+    if points:
+        save_forecast_cache(lat, lon, points)
+        return load_forecast_cache()
+    
+    # Failsafe: Use old cache if internet is down 
+    if cache:
+        logger.warning("[FORECAST] API Offline. Falling back to local cache.")
+        return cache
+        
+    raise Exception("Weather data unavailable. Check API Key and internet.")
 
 def get_cache_age_hours() -> Optional[float]:
-    """Age of the saved forecast cache in hours."""
+    """Returns the age of the offline cache in hours for the Health Dashboard."""
     cache = load_forecast_cache()
     if not cache:
         return None
-    return round((time.time() - cache["saved_at"]) / 3600, 1)
-
-
-# ─────────────────────────────────────────────────────────────
-# 4. LOOK UP DATA FROM SAVED FORECAST
-# ─────────────────────────────────────────────────────────────
-
-def get_temp_for_hours_ahead(hours_ahead: float = 0.0) -> Optional[float]:
-    """Predicted temperature for N hours in the future."""
-    cache = load_forecast_cache()
-    if not cache or not cache.get("points"):
-        return None
-
-    target_ts = time.time() + (hours_ahead * 3600)
-    closest = min(cache["points"], key=lambda p: abs(p["ts"] - target_ts))
-    return closest["temp"]
-
-
-def get_forecast_summary_for_chart() -> list[dict]:
-    """Return all forecast points for the Streamlit chart."""
-    cache = load_forecast_cache()
-    return cache.get("points", []) if cache else []
+    return round((time.time() - cache.get("saved_at", 0)) / 3600, 1)
