@@ -1,6 +1,6 @@
 \# 🚢 MAR-HVAC AI 
 
-\*\*Edge-Distributed HVAC Optimization \& Thermodynamic Engine for Maritime Vessels\*\* \*Idea Forge 2026 Submission | Government Polytechnic Pune\*
+\*\*Edge-Distributed HVAC Optimization \& Thermodynamic Engine for Maritime Vessels\*
 
 
 
