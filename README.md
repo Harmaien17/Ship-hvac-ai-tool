@@ -1,82 +1,42 @@
-\# 🚢 MAR-HVAC AI 
+# 🚢 MAR-HVAC AI 
+**Edge-Distributed HVAC Optimization & Thermodynamic Engine for Maritime Vessels** *Idea Forge 2026 Submission | Government Polytechnic Pune*
 
-\*\*Edge-Distributed HVAC Optimization \& Thermodynamic Engine for Maritime Vessels\*
+---
 
+## 🌊 Executive Summary
+MAR-HVAC AI is a decentralized, Edge-AI cooling optimization system engineered specifically for deep-sea commercial vessels. By computing an 11-variable thermodynamic matrix in real-time, the system autonomously minimizes compressor load, significantly reduces marine diesel CO₂ emissions, and delivers an estimated **₹12,00,000 to ₹18,00,000 in annual operational savings** per vessel. 
 
+Designed with deep-sea resilience at its core, the architecture operates fully autonomously on low-RAM edge nodes, ensuring uninterrupted optimization even during prolonged Starlink or satellite connectivity blackouts.
 
-\---
+---
 
+## ✨ Core Architecture & Features
 
+### 🧠 The "Brain": 11-Variable Thermodynamic Engine (Backend)
+* **Dynamic 11-Point Load Modeling:** Precisely calculates cooling requirements (kW) by synthesizing hull U-values, thermal lag, latent heat extraction, engine room radiant heat, and metabolic/equipment loads.
+* **Dynamic Solar & Geometry Scaling:** Incorporates adjustable window configurations to accurately scale the Solar Heat Gain Coefficient (SHGC), seamlessly adapting calculations for diverse vessel layouts—from standard crew cabins to multi-window bridge decks.
+* **Deep-Sea Failsafe Resilience:** Continuously monitors satellite connectivity. In the event of an internet blackout, the system seamlessly transitions to a locally generated **14-day weather cache** (`forecast_cache.json`) to sustain anticipatory cooling without disruption.
+* **Real-Time Economic & Carbon Tracking:** Translates energy optimizations directly into Indian Rupees (₹) and tracks active CO₂ reductions utilizing the standard 0.68 kg/kWh marine diesel emission factor.
+* **Waste Heat Offset Analysis:** Features an integrated endpoint to calculate potential HVAC compressor offsets by recovering energy from engine exhaust waste heat.
 
-\## 🌊 Overview
+### 🖥️ The Command Center (Frontend Edge Dashboard)
+* **Local AutoCAD Parsing:** An edge-computed PDF parser that autonomously extracts cabin geometry (m²) directly from ship blueprints, eliminating the need to transmit heavy files over limited satellite bandwidth.
+* **Anticipatory Cooling Analytics:** Interactive Plotly visualizations map 14-day temperature and humidity forecasts, allowing the system to preemptively condition cabin environments ahead of severe weather fronts.
+* **Autonomous Decision Logging:** Provides a real-time, human-readable audit trail of the AI's thermodynamic adjustments (e.g., *“Occupancy Sensor: Empty. Triggering STANDBY mode.”*).
 
-MAR-HVAC AI is a decentralized, Edge-AI cooling optimization system designed specifically for deep-sea cargo ships. By calculating an 11-variable thermodynamic matrix in real-time, the system reduces compressor load, cuts marine diesel CO2 emissions, and saves vessel owners approximately \*\*₹12,00,000 to ₹18,00,000 annually\*\*. 
+---
 
+## 🛠️ Technical Stack
+* **Backend Engine:** Python 3.12, FastAPI, Pydantic, Uvicorn
+* **Frontend Dashboard:** Streamlit, Plotly, Pandas, PyPDF
+* **External Integrations:** OpenWeather API (simulating live Starlink telemetry)
+* **Architecture:** Distributed Edge-Compute (Optimized for shipboard IoT deployment)
 
+---
 
-Built for deep-sea resilience, the architecture operates fully autonomously even during Starlink/Satellite connectivity dropouts.
+## 🚀 Deployment Instructions
 
-
-
-\---
-
-
-
-\## ✨ Core Features
-
-
-
-\### 🧠 The "Brain": 11-Variable Thermodynamic Engine (Backend)
-
-\* \*\*Precision Load Math:\*\* Dynamically calculates cooling requirements (kW) by factoring in U-values of the hull, solar heat gain (SHGC), engine room radiant heat, thermal lag, latent heat, and metabolic/equipment loads.
-
-\* \*\*Deep-Sea Resilience (Failsafe):\*\* Constantly monitors Starlink satellite connectivity. If internet drops, the system seamlessly falls back to a locally generated \*\*14-day weather cache\*\* (`forecast\_cache.json`) to maintain anticipatory cooling.
-
-\* \*\*Economic ROI Tracker:\*\* Translates energy savings directly into Indian Rupees (₹) and tracks live CO2 reduction (using the 0.68 kg/kWh marine diesel emission factor).
-
-\* \*\*Waste Heat Offset:\*\* Includes an endpoint to calculate potential HVAC compressor offsets using engine exhaust waste heat recovery.
-
-
-
-\### 🖥️ The Command Center (Frontend)
-
-\* \*\*Local AutoCAD Parsing:\*\* An Edge-computed PDF parser that extracts cabin dimensions (m²) directly from ship blueprints without sending heavy files over expensive satellite internet.
-
-\* \*\*Anticipatory Cooling Charts:\*\* Interactive Plotly charts mapping the 14-day temperature and humidity forecasts to prepare the cabin environment ahead of weather fronts.
-
-\* \*\*Live "Chatbot" Decision Log:\*\* Real-time, human-readable explanations of the AI's thermodynamic choices (e.g., \*“Occupancy Sensor: Empty. Triggering STANDBY mode.”\*).
-
-
-
-\---
-
-
-
-\## 🛠️ Tech Stack
-
-\* \*\*Backend:\*\* Python 3.12, FastAPI, Pydantic, Uvicorn
-
-\* \*\*Frontend:\*\* Streamlit, Plotly, Pandas, PyPDF
-
-\* \*\*External Integrations:\*\* OpenWeather API (simulating Starlink feed)
-
-\* \*\*Architecture:\*\* Distributed Edge-Compute (Designed to run on low-RAM shipboard IoT nodes).
-
-
-
-\---
-
-
-
-\## 🚀 How to Run Locally
-
-
-
-\### 1. Start the AI Engine (Backend)
-
-Open a terminal in the root directory and start the FastAPI server:
-
+### 1. Initialize the AI Engine (Backend)
+Open a terminal in the root directory, activate your virtual environment, and start the FastAPI server:
 ```bash
-
 python -m uvicorn backend.main:app --reload
-
