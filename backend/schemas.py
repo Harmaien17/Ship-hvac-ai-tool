@@ -126,3 +126,16 @@ class DrawingParseResult(BaseModel):
     cabin_area_m2: Optional[float]
     window_area_m2: Optional[float]
     parse_notes: List[str]
+
+class BlueprintData(BaseModel):
+    transmission: float = 0.0
+    solar: float = 0.0
+    engine_radiant: float = 0.0
+    thermal_lag: float = 0.0      # Variable 4
+    latent_heat: float = 0.0      # Variable 5
+    metabolic: float = 0.0
+    equipment: float = 0.0
+    infiltration: float = 0.0
+    ceiling_conduction: float = 0.0
+    floor_conduction: float = 0.0
+    total_raw_load: float = 0.0   # Variable 11
