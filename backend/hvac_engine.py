@@ -44,8 +44,9 @@ def calculate_optimized_load(telemetry: CabinTelemetry) -> HVACDecision:
     # V1: Transmission (Hull/Walls)
     q_transmission = telemetry.cabin_area_m2 * U_VALUE_HULL * delta_t
     
-    # V2: Solar (Windows)
-    q_solar = telemetry.window_area_m2 * SHGC_WINDOW * solar_irr if telemetry.direct_sunlight else 0.0
+    # V2: Solar (Windows) - UPDATED TO INCLUDE WINDOW COUNT
+    total_window_area = telemetry.window_area_m2 * telemetry.window_count
+    q_solar = total_window_area * SHGC_WINDOW * solar_irr if telemetry.direct_sunlight else 0.0
     
     # V3: Engine Radiant Heat
     q_engine = 500.0 if telemetry.engine_adjacent else 0.0
