@@ -1,845 +1,845 @@
 {
-  "saved_at": 1775112067.2665286,
+  "saved_at": 1775325296.2509012,
   "lat": 19.07,
   "lon": 72.87,
   "points": [
     {
-      "ts": 1775120400,
-      "temp": 30.15,
-      "humidity": 58,
-      "description": "scattered clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775131200,
-      "temp": 28.83,
-      "humidity": 61,
-      "description": "scattered clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775142000,
-      "temp": 27.23,
-      "humidity": 66,
-      "description": "few clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775152800,
-      "temp": 27.02,
-      "humidity": 63,
-      "description": "few clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775163600,
-      "temp": 26.38,
-      "humidity": 66,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775174400,
-      "temp": 26.04,
-      "humidity": 66,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775185200,
-      "temp": 26.66,
-      "humidity": 63,
-      "description": "scattered clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775196000,
-      "temp": 27.61,
-      "humidity": 60,
-      "description": "scattered clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775206800,
-      "temp": 27.88,
-      "humidity": 60,
-      "description": "scattered clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775217600,
-      "temp": 27.88,
-      "humidity": 61,
-      "description": "few clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775228400,
-      "temp": 27.47,
-      "humidity": 64,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775239200,
-      "temp": 26.99,
-      "humidity": 66,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775250000,
-      "temp": 26.47,
-      "humidity": 68,
-      "description": "broken clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775260800,
-      "temp": 26.21,
-      "humidity": 70,
-      "description": "scattered clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775271600,
-      "temp": 26.64,
-      "humidity": 67,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775282400,
-      "temp": 27.75,
-      "humidity": 64,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775293200,
-      "temp": 28,
-      "humidity": 66,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775304000,
-      "temp": 27.82,
-      "humidity": 71,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775314800,
-      "temp": 27.33,
-      "humidity": 73,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
       "ts": 1775325600,
-      "temp": 26.88,
-      "humidity": 71,
-      "description": "clear sky",
+      "temp": 28.03,
+      "humidity": 74,
+      "description": "few clouds",
       "solar": 400.0
     },
     {
       "ts": 1775336400,
-      "temp": 26.5,
-      "humidity": 72,
-      "description": "few clouds",
+      "temp": 27.49,
+      "humidity": 73,
+      "description": "scattered clouds",
       "solar": 400.0
     },
     {
       "ts": 1775347200,
-      "temp": 26.42,
-      "humidity": 65,
+      "temp": 26.78,
+      "humidity": 68,
       "description": "scattered clouds",
       "solar": 400.0
     },
     {
       "ts": 1775358000,
-      "temp": 26.82,
-      "humidity": 59,
-      "description": "scattered clouds",
+      "temp": 26.78,
+      "humidity": 60,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775368800,
-      "temp": 27.57,
-      "humidity": 53,
-      "description": "few clouds",
+      "temp": 27.81,
+      "humidity": 54,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775379600,
-      "temp": 27.54,
-      "humidity": 54,
+      "temp": 27.91,
+      "humidity": 53,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775390400,
-      "temp": 27.38,
-      "humidity": 55,
-      "description": "few clouds",
+      "temp": 27.57,
+      "humidity": 56,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775401200,
-      "temp": 26.9,
-      "humidity": 55,
-      "description": "clear sky",
+      "temp": 26.89,
+      "humidity": 54,
+      "description": "scattered clouds",
       "solar": 400.0
     },
     {
       "ts": 1775412000,
-      "temp": 26.46,
-      "humidity": 54,
-      "description": "clear sky",
+      "temp": 26.59,
+      "humidity": 56,
+      "description": "few clouds",
       "solar": 400.0
     },
     {
       "ts": 1775422800,
-      "temp": 26.14,
+      "temp": 26.2,
       "humidity": 56,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775433600,
-      "temp": 25.68,
-      "humidity": 56,
+      "temp": 25.75,
+      "humidity": 57,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775444400,
-      "temp": 25.99,
+      "temp": 26.21,
       "humidity": 55,
-      "description": "few clouds",
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775455200,
-      "temp": 27.19,
+      "temp": 27.14,
       "humidity": 53,
-      "description": "scattered clouds",
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775466000,
-      "temp": 27.06,
-      "humidity": 57,
+      "temp": 27.15,
+      "humidity": 58,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775476800,
-      "temp": 27.36,
-      "humidity": 57,
+      "temp": 27.29,
+      "humidity": 59,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775487600,
-      "temp": 27.05,
-      "humidity": 58,
+      "temp": 26.86,
+      "humidity": 60,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775498400,
-      "temp": 26.59,
-      "humidity": 58,
+      "temp": 26.48,
+      "humidity": 59,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775509200,
-      "temp": 26.18,
-      "humidity": 61,
+      "temp": 25.98,
+      "humidity": 60,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775520000,
-      "temp": 25.84,
-      "humidity": 64,
+      "temp": 25.7,
+      "humidity": 61,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775530800,
-      "temp": 26.22,
-      "humidity": 61,
+      "temp": 26.24,
+      "humidity": 60,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775541600,
-      "temp": 27.52,
-      "humidity": 56,
+      "temp": 27.8,
+      "humidity": 53,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775552400,
-      "temp": 30.15,
-      "humidity": 58,
-      "description": "scattered clouds",
+      "temp": 27.8,
+      "humidity": 57,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775563200,
-      "temp": 28.83,
-      "humidity": 61,
-      "description": "scattered clouds",
+      "temp": 27.63,
+      "humidity": 66,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775574000,
-      "temp": 27.23,
-      "humidity": 66,
-      "description": "few clouds",
+      "temp": 27.31,
+      "humidity": 71,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775584800,
-      "temp": 27.02,
-      "humidity": 63,
-      "description": "few clouds",
+      "temp": 27.08,
+      "humidity": 72,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775595600,
-      "temp": 26.38,
-      "humidity": 66,
+      "temp": 26.62,
+      "humidity": 74,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775606400,
-      "temp": 26.04,
-      "humidity": 66,
+      "temp": 26.31,
+      "humidity": 75,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775617200,
-      "temp": 26.66,
-      "humidity": 63,
-      "description": "scattered clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775628000,
-      "temp": 27.61,
-      "humidity": 60,
-      "description": "scattered clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775638800,
-      "temp": 27.88,
-      "humidity": 60,
-      "description": "scattered clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775649600,
-      "temp": 27.88,
-      "humidity": 61,
-      "description": "few clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775660400,
-      "temp": 27.47,
-      "humidity": 64,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775671200,
-      "temp": 26.99,
-      "humidity": 66,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775682000,
-      "temp": 26.47,
-      "humidity": 68,
-      "description": "broken clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775692800,
-      "temp": 26.21,
-      "humidity": 70,
-      "description": "scattered clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775703600,
-      "temp": 26.64,
-      "humidity": 67,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775714400,
-      "temp": 27.75,
-      "humidity": 64,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775725200,
-      "temp": 28,
-      "humidity": 66,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775736000,
-      "temp": 27.82,
-      "humidity": 71,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775746800,
-      "temp": 27.33,
-      "humidity": 73,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775757600,
-      "temp": 26.88,
-      "humidity": 71,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1775768400,
-      "temp": 26.5,
+      "temp": 26.79,
       "humidity": 72,
       "description": "few clouds",
       "solar": 400.0
     },
     {
-      "ts": 1775779200,
-      "temp": 26.42,
+      "ts": 1775628000,
+      "temp": 28.3,
       "humidity": 65,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1775638800,
+      "temp": 28.62,
+      "humidity": 65,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1775649600,
+      "temp": 28.44,
+      "humidity": 69,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1775660400,
+      "temp": 27.69,
+      "humidity": 74,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1775671200,
+      "temp": 27.33,
+      "humidity": 75,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1775682000,
+      "temp": 26.74,
+      "humidity": 76,
+      "description": "few clouds",
+      "solar": 400.0
+    },
+    {
+      "ts": 1775692800,
+      "temp": 26.58,
+      "humidity": 75,
+      "description": "light rain",
+      "solar": 400.0
+    },
+    {
+      "ts": 1775703600,
+      "temp": 27.4,
+      "humidity": 68,
+      "description": "light rain",
+      "solar": 400.0
+    },
+    {
+      "ts": 1775714400,
+      "temp": 28.7,
+      "humidity": 62,
+      "description": "broken clouds",
+      "solar": 400.0
+    },
+    {
+      "ts": 1775725200,
+      "temp": 28.72,
+      "humidity": 65,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1775736000,
+      "temp": 28.68,
+      "humidity": 68,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1775746800,
+      "temp": 27.95,
+      "humidity": 69,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1775757600,
+      "temp": 28.03,
+      "humidity": 74,
+      "description": "few clouds",
+      "solar": 400.0
+    },
+    {
+      "ts": 1775768400,
+      "temp": 27.49,
+      "humidity": 73,
+      "description": "scattered clouds",
+      "solar": 400.0
+    },
+    {
+      "ts": 1775779200,
+      "temp": 26.78,
+      "humidity": 68,
       "description": "scattered clouds",
       "solar": 400.0
     },
     {
       "ts": 1775790000,
-      "temp": 26.82,
-      "humidity": 59,
-      "description": "scattered clouds",
+      "temp": 26.78,
+      "humidity": 60,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775800800,
-      "temp": 27.57,
-      "humidity": 53,
-      "description": "few clouds",
+      "temp": 27.81,
+      "humidity": 54,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775811600,
-      "temp": 27.54,
-      "humidity": 54,
+      "temp": 27.91,
+      "humidity": 53,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775822400,
-      "temp": 27.38,
-      "humidity": 55,
-      "description": "few clouds",
+      "temp": 27.57,
+      "humidity": 56,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775833200,
-      "temp": 26.9,
-      "humidity": 55,
-      "description": "clear sky",
+      "temp": 26.89,
+      "humidity": 54,
+      "description": "scattered clouds",
       "solar": 400.0
     },
     {
       "ts": 1775844000,
-      "temp": 26.46,
-      "humidity": 54,
-      "description": "clear sky",
+      "temp": 26.59,
+      "humidity": 56,
+      "description": "few clouds",
       "solar": 400.0
     },
     {
       "ts": 1775854800,
-      "temp": 26.14,
+      "temp": 26.2,
       "humidity": 56,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775865600,
-      "temp": 25.68,
-      "humidity": 56,
+      "temp": 25.75,
+      "humidity": 57,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775876400,
-      "temp": 25.99,
+      "temp": 26.21,
       "humidity": 55,
-      "description": "few clouds",
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775887200,
-      "temp": 27.19,
+      "temp": 27.14,
       "humidity": 53,
-      "description": "scattered clouds",
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775898000,
-      "temp": 27.06,
-      "humidity": 57,
+      "temp": 27.15,
+      "humidity": 58,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775908800,
-      "temp": 27.36,
-      "humidity": 57,
+      "temp": 27.29,
+      "humidity": 59,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775919600,
-      "temp": 27.05,
-      "humidity": 58,
+      "temp": 26.86,
+      "humidity": 60,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775930400,
-      "temp": 26.59,
-      "humidity": 58,
+      "temp": 26.48,
+      "humidity": 59,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775941200,
-      "temp": 26.18,
-      "humidity": 61,
+      "temp": 25.98,
+      "humidity": 60,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775952000,
-      "temp": 25.84,
-      "humidity": 64,
+      "temp": 25.7,
+      "humidity": 61,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775962800,
-      "temp": 26.22,
-      "humidity": 61,
+      "temp": 26.24,
+      "humidity": 60,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775973600,
-      "temp": 27.52,
-      "humidity": 56,
+      "temp": 27.8,
+      "humidity": 53,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775984400,
-      "temp": 30.15,
-      "humidity": 58,
-      "description": "scattered clouds",
+      "temp": 27.8,
+      "humidity": 57,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1775995200,
-      "temp": 28.83,
-      "humidity": 61,
-      "description": "scattered clouds",
+      "temp": 27.63,
+      "humidity": 66,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776006000,
-      "temp": 27.23,
-      "humidity": 66,
-      "description": "few clouds",
+      "temp": 27.31,
+      "humidity": 71,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776016800,
-      "temp": 27.02,
-      "humidity": 63,
-      "description": "few clouds",
+      "temp": 27.08,
+      "humidity": 72,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776027600,
-      "temp": 26.38,
-      "humidity": 66,
+      "temp": 26.62,
+      "humidity": 74,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776038400,
-      "temp": 26.04,
-      "humidity": 66,
+      "temp": 26.31,
+      "humidity": 75,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776049200,
-      "temp": 26.66,
-      "humidity": 63,
-      "description": "scattered clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1776060000,
-      "temp": 27.61,
-      "humidity": 60,
-      "description": "scattered clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1776070800,
-      "temp": 27.88,
-      "humidity": 60,
-      "description": "scattered clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1776081600,
-      "temp": 27.88,
-      "humidity": 61,
-      "description": "few clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1776092400,
-      "temp": 27.47,
-      "humidity": 64,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1776103200,
-      "temp": 26.99,
-      "humidity": 66,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1776114000,
-      "temp": 26.47,
-      "humidity": 68,
-      "description": "broken clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1776124800,
-      "temp": 26.21,
-      "humidity": 70,
-      "description": "scattered clouds",
-      "solar": 400.0
-    },
-    {
-      "ts": 1776135600,
-      "temp": 26.64,
-      "humidity": 67,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1776146400,
-      "temp": 27.75,
-      "humidity": 64,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1776157200,
-      "temp": 28,
-      "humidity": 66,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1776168000,
-      "temp": 27.82,
-      "humidity": 71,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1776178800,
-      "temp": 27.33,
-      "humidity": 73,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1776189600,
-      "temp": 26.88,
-      "humidity": 71,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1776200400,
-      "temp": 26.5,
+      "temp": 26.79,
       "humidity": 72,
       "description": "few clouds",
       "solar": 400.0
     },
     {
-      "ts": 1776211200,
-      "temp": 26.42,
+      "ts": 1776060000,
+      "temp": 28.3,
       "humidity": 65,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776070800,
+      "temp": 28.62,
+      "humidity": 65,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776081600,
+      "temp": 28.44,
+      "humidity": 69,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776092400,
+      "temp": 27.69,
+      "humidity": 74,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776103200,
+      "temp": 27.33,
+      "humidity": 75,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776114000,
+      "temp": 26.74,
+      "humidity": 76,
+      "description": "few clouds",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776124800,
+      "temp": 26.58,
+      "humidity": 75,
+      "description": "light rain",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776135600,
+      "temp": 27.4,
+      "humidity": 68,
+      "description": "light rain",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776146400,
+      "temp": 28.7,
+      "humidity": 62,
+      "description": "broken clouds",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776157200,
+      "temp": 28.72,
+      "humidity": 65,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776168000,
+      "temp": 28.68,
+      "humidity": 68,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776178800,
+      "temp": 27.95,
+      "humidity": 69,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776189600,
+      "temp": 28.03,
+      "humidity": 74,
+      "description": "few clouds",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776200400,
+      "temp": 27.49,
+      "humidity": 73,
+      "description": "scattered clouds",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776211200,
+      "temp": 26.78,
+      "humidity": 68,
       "description": "scattered clouds",
       "solar": 400.0
     },
     {
       "ts": 1776222000,
-      "temp": 26.82,
-      "humidity": 59,
-      "description": "scattered clouds",
+      "temp": 26.78,
+      "humidity": 60,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776232800,
-      "temp": 27.57,
-      "humidity": 53,
-      "description": "few clouds",
+      "temp": 27.81,
+      "humidity": 54,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776243600,
-      "temp": 27.54,
-      "humidity": 54,
+      "temp": 27.91,
+      "humidity": 53,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776254400,
-      "temp": 27.38,
-      "humidity": 55,
-      "description": "few clouds",
+      "temp": 27.57,
+      "humidity": 56,
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776265200,
-      "temp": 26.9,
-      "humidity": 55,
-      "description": "clear sky",
+      "temp": 26.89,
+      "humidity": 54,
+      "description": "scattered clouds",
       "solar": 400.0
     },
     {
       "ts": 1776276000,
-      "temp": 26.46,
-      "humidity": 54,
-      "description": "clear sky",
+      "temp": 26.59,
+      "humidity": 56,
+      "description": "few clouds",
       "solar": 400.0
     },
     {
       "ts": 1776286800,
-      "temp": 26.14,
+      "temp": 26.2,
       "humidity": 56,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776297600,
-      "temp": 25.68,
-      "humidity": 56,
+      "temp": 25.75,
+      "humidity": 57,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776308400,
-      "temp": 25.99,
+      "temp": 26.21,
       "humidity": 55,
-      "description": "few clouds",
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776319200,
-      "temp": 27.19,
+      "temp": 27.14,
       "humidity": 53,
-      "description": "scattered clouds",
+      "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776330000,
-      "temp": 27.06,
-      "humidity": 57,
+      "temp": 27.15,
+      "humidity": 58,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776340800,
-      "temp": 27.36,
-      "humidity": 57,
+      "temp": 27.29,
+      "humidity": 59,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776351600,
-      "temp": 27.05,
-      "humidity": 58,
+      "temp": 26.86,
+      "humidity": 60,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776362400,
-      "temp": 26.59,
-      "humidity": 58,
+      "temp": 26.48,
+      "humidity": 59,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776373200,
-      "temp": 26.18,
-      "humidity": 61,
+      "temp": 25.98,
+      "humidity": 60,
       "description": "clear sky",
       "solar": 400.0
     },
     {
       "ts": 1776384000,
-      "temp": 25.84,
-      "humidity": 64,
-      "description": "clear sky",
-      "solar": 400.0
-    },
-    {
-      "ts": 1776394800,
-      "temp": 26.22,
+      "temp": 25.7,
       "humidity": 61,
       "description": "clear sky",
       "solar": 400.0
     },
     {
+      "ts": 1776394800,
+      "temp": 26.24,
+      "humidity": 60,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
       "ts": 1776405600,
-      "temp": 27.52,
-      "humidity": 56,
+      "temp": 27.8,
+      "humidity": 53,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776416400,
+      "temp": 27.8,
+      "humidity": 57,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776427200,
+      "temp": 27.63,
+      "humidity": 66,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776438000,
+      "temp": 27.31,
+      "humidity": 71,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776448800,
+      "temp": 27.08,
+      "humidity": 72,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776459600,
+      "temp": 26.62,
+      "humidity": 74,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776470400,
+      "temp": 26.31,
+      "humidity": 75,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776481200,
+      "temp": 26.79,
+      "humidity": 72,
+      "description": "few clouds",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776492000,
+      "temp": 28.3,
+      "humidity": 65,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776502800,
+      "temp": 28.62,
+      "humidity": 65,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776513600,
+      "temp": 28.44,
+      "humidity": 69,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776524400,
+      "temp": 27.69,
+      "humidity": 74,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776535200,
+      "temp": 27.33,
+      "humidity": 75,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776546000,
+      "temp": 26.74,
+      "humidity": 76,
+      "description": "few clouds",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776556800,
+      "temp": 26.58,
+      "humidity": 75,
+      "description": "light rain",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776567600,
+      "temp": 27.4,
+      "humidity": 68,
+      "description": "light rain",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776578400,
+      "temp": 28.7,
+      "humidity": 62,
+      "description": "broken clouds",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776589200,
+      "temp": 28.72,
+      "humidity": 65,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776600000,
+      "temp": 28.68,
+      "humidity": 68,
+      "description": "clear sky",
+      "solar": 400.0
+    },
+    {
+      "ts": 1776610800,
+      "temp": 27.95,
+      "humidity": 69,
       "description": "clear sky",
       "solar": 400.0
     }
