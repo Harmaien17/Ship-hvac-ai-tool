@@ -78,10 +78,10 @@ def calculate_optimized_load(telemetry: CabinTelemetry, blueprint_total: Optiona
     mode = HVACMode.FULL_COOLING
     
     if not telemetry.occupancy:
-        mode = HVACMode.STANDBY
-        optimized_load_kw *= 0.30 
+        mode = HVACMode.MAINTENANCE_COOLING   # Ghost Cooling Protocol
+        optimized_load_kw *= 0.30
         actual_setpoint = 26.0
-        log.append("Occupancy Sensor: Empty. STANDBY mode engaged.")
+        log.append("Occupancy Sensor: Empty. MAINTENANCE_COOLING (Ghost Cooling) engaged.")
     elif ext_temp < telemetry.target_temp:
         mode = HVACMode.REDUCED_COOLING
         optimized_load_kw *= 0.50

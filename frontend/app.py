@@ -662,7 +662,7 @@ st.markdown("""
   .mode-FULL_COOLING         { color:#c83048; background:#fde8ec; border:1.5px solid #f0a0b0; }
   .mode-REDUCED_COOLING      { color:#0e7868; background:#d0f5f0; border:1.5px solid #80d8d0; }
   .mode-MAINTENANCE_COOLING  { color:#906000; background:#fff0c0; border:1.5px solid #f0c840; }
-  .mode-STANDBY              { color:#107848; background:#c8f0e0; border:1.5px solid #80d0a8; }
+  .mode-STANDBY              { color:#906000; background:#fff0c0; border:1.5px solid #f0c840; } /* Ghost Cooling */
   .mode-FAILSAFE             { color:#c83048; background:#fde8ec; border:1.5px solid #f0a0b0; }
   .mode-EMERGENCY_HEAT       { color:#1848b8; background:#d8e8ff; border:1.5px solid #90b8f0; }
   .mode-CORROSION_PREVENTION { color:#c83048; background:#fde8ec; border:1.5px solid #f0a0b0; }
@@ -1013,29 +1013,61 @@ with st.sidebar:
 
     # ── AutoCAD Parser ────────────────────────────────────────
     st.markdown('<div class="section-label">📐 AutoCAD Blueprint Parser</div>', unsafe_allow_html=True)
-    drawing     = st.file_uploader("Upload Ship Drawing PDF", type=["pdf"])
+    drawing     = st.file_uploader("Upload Ship Drawing (PDF or DWG)", type=["pdf", "dwg"])
     parsed_area = 25.0
     parsed_id   = "CABIN-A3"
     parsed_win  = 1.5
 
     if drawing:
-        if not PYPDF_AVAILABLE:
-            st.error("Run: pip install pypdf")
-        else:
-            with st.spinner("Parsing blueprint locally…"):
-                d_res = parse_ship_drawing_locally(drawing.read())
-                if d_res["success"]:
-                    parsed_area = d_res["cabin_area_m2"]
-                    parsed_id   = d_res["cabin_id"]
-                    parsed_win  = d_res.get("window_area_m2") or parsed_win
-                    notes_str   = " · ".join(d_res.get("parse_notes", []))
-                    st.success(f"✅ {parsed_id} — {parsed_area} m²")
-                    if notes_str:
-                        st.caption(notes_str)
+        fname = drawing.name.lower()
+        if fname.endswith(".dwg"):
+            # DWG is binary — send to backend /analyze/blueprint which handles it
+            st.info("📐 DWG file detected — sending to backend parser…")
+            try:
+                form_data = {
+                    "cabin_id":       (None, cabin_id if "cabin_id" in dir() else "CABIN-A3"),
+                    "internal_temp":  (None, "26.0"),
+                    "internal_rh":    (None, "68.0"),
+                    "market_segment": (None, "cargo"),
+                }
+                files = {"drawing": (drawing.name, drawing.read(), "application/octet-stream")}
+                r = requests.post(
+                    f"{BACKEND_URL}/api/v1/analyze/blueprint",
+                    data={k: v[1] for k, v in form_data.items()},
+                    files=files,
+                    timeout=15,
+                )
+                if r.status_code == 200:
+                    bp = r.json().get("blueprint_variables", {})
+                    parsed_area = bp.get("cabin_area_m2") or parsed_area
+                    parsed_win  = bp.get("window_area_m2") or parsed_win
+                    parsed_id   = r.json().get("cabin_id", parsed_id)
+                    st.success(f"✅ DWG parsed via backend — {parsed_id}")
                 else:
-                    st.warning("Could not extract dimensions. Enter manually below.")
-                    for n in d_res.get("parse_notes", []):
-                        st.caption(f"• {n}")
+                    st.warning(f"Backend returned {r.status_code}. Enter dimensions manually.")
+            except Exception as e:
+                st.warning(f"Backend unreachable for DWG ({e}). Enter dimensions manually below.")
+
+        elif fname.endswith(".pdf"):
+            if not PYPDF_AVAILABLE:
+                st.error("Run: pip install pypdf")
+            else:
+                with st.spinner("Parsing blueprint locally…"):
+                    d_res = parse_ship_drawing_locally(drawing.read())
+                    if d_res["success"]:
+                        parsed_area = d_res["cabin_area_m2"]
+                        parsed_id   = d_res["cabin_id"]
+                        parsed_win  = d_res.get("window_area_m2") or parsed_win
+                        notes_str   = " · ".join(d_res.get("parse_notes", []))
+                        st.success(f"✅ {parsed_id} — {parsed_area} m²")
+                        if notes_str:
+                            st.caption(notes_str)
+                    else:
+                        st.warning("Could not extract dimensions. Enter manually below.")
+                        for n in d_res.get("parse_notes", []):
+                            st.caption(f"• {n}")
+        else:
+            st.error("Unsupported file type. Please upload a .pdf or .dwg file.")
 
     st.markdown("---")
 
@@ -1355,7 +1387,8 @@ if result and "mode" in result:
         </div>""", unsafe_allow_html=True)
 
     with col_sav:
-        ghost_active = mode == "MAINTENANCE_COOLING"
+        # Ghost Cooling triggers on MAINTENANCE_COOLING (mock/fixed engine) OR STANDBY (live engine)
+        ghost_active = mode in ("MAINTENANCE_COOLING", "STANDBY")
         sav_border   = "#d08000" if ghost_active else ("#2a68e0" if is_heat else "#20a868")
         sav_color    = "#d08000" if ghost_active else ("#2a68e0" if is_heat else "#20a868")
         sav_bg       = "#fff9ed" if ghost_active else ("#eef2ff" if is_heat else "#edfdf5")
@@ -1374,15 +1407,15 @@ if result and "mode" in result:
         st.markdown("<div style='height:7px'></div>", unsafe_allow_html=True)
 
         # Mode-specific sub-panel
-        if mode == "MAINTENANCE_COOLING":
+        if mode in ("MAINTENANCE_COOLING", "STANDBY"):
             st.markdown(f"""
             <div style="background:#fffbf0; border:1.5px solid #f0d060;
                         border-left:4px solid #d08000; border-radius:9px; padding:10px;">
               <div style="font-family:'Nunito',sans-serif; font-size:0.70rem;
-                          font-weight:800; color:#906000;">GHOST COOLING ACTIVE</div>
+                          font-weight:800; color:#906000;">⚙️ GHOST COOLING ACTIVE</div>
               <div style="font-family:'DM Mono',monospace; font-size:0.68rem;
                           color:#385070; margin-top:4px;">
-                Empty cabin · {100-savings:.0f}% load · {setpoint:.1f}°C
+                Empty cabin · {100-savings:.0f}% load · {setpoint:.1f}°C setpoint
               </div>
             </div>""", unsafe_allow_html=True)
         elif mode == "CORROSION_PREVENTION":
