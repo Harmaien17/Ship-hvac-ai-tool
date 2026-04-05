@@ -48,8 +48,8 @@ except ImportError:
 BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
 API_TIMEOUT = 10
 
-# ── DEMO MODE — set True for screen recording (forces offline/mock) ──
-DEMO_MODE = True
+# ── DEMO MODE — False = live backend; True = always mock (screen recording only) ──
+DEMO_MODE = False
 
 st.set_page_config(
     page_title="MAR-HVAC AI",
@@ -775,11 +775,27 @@ def api_health() -> Optional[dict]:
 
 
 def api_forecast() -> list:
+    """Fetch forecast chart points — tries backend first, falls back to local generation."""
+    # Try backend chart endpoint first
     try:
         r = requests.get(f"{BACKEND_URL}/api/v1/weather/forecast/chart", timeout=6)
-        return r.json().get("points", [])
+        r.raise_for_status()
+        pts = r.json().get("points", [])
+        if pts:
+            return pts
     except Exception:
-        return []
+        pass
+    # Local fallback: generate 14-day simulated route forecast
+    import time as _time
+    now = int(_time.time())
+    pts = []
+    for i in range(14):
+        pts.append({
+            "ts":       now + (i * 86400),
+            "temp":     round(28.0 + (i % 3) - (i * 0.2), 1),
+            "humidity": 65 + (i % 5),
+        })
+    return pts
 
 
 def run_local_engine(payload: dict) -> dict:
@@ -798,30 +814,122 @@ def run_local_engine(payload: dict) -> dict:
         return {"error": str(e)}
 
 
-def mock_fallback(cabin_id: str) -> dict:
-    """Demo-safe mock so the UI always renders something."""
+def mock_fallback(payload: dict) -> dict:
+    """
+    Local mock engine — computes dynamic values from the real payload
+    so readings update when sliders change, even with no backend.
+    """
+    import math
+
+    cabin_id     = payload.get("cabin_id", "CABIN-A3")
+    int_temp     = payload.get("internal_temp", 26.0)
+    ext_temp     = payload.get("external_temp") or 34.0
+    rh           = payload.get("internal_humidity", 68.0)
+    area         = payload.get("cabin_area_m2", 25.0)
+    win_area     = payload.get("window_area_m2", 1.5)
+    equip_w      = payload.get("equipment_wattage", 450.0)
+    occ_count    = payload.get("occupant_count", 0)
+    occupied     = payload.get("occupancy", False)
+    target       = payload.get("target_temp", 22.0)
+    solar        = payload.get("solar_irradiance") or 650.0
+    sunlight     = payload.get("direct_sunlight", False)
+    heat_hull    = payload.get("heat_soaked_hull", False)
+    eng_adj      = payload.get("engine_adjacent", False)
+    ceil_area    = payload.get("ceiling_area_exposed_m2", 0.0)
+    floor_area   = payload.get("floor_area_exposed_m2", 0.0)
+    market       = payload.get("market_segment", "cargo")
+
+    # Simple thermodynamic estimates (ASHRAE-approximate)
+    delta_t          = max(ext_temp - target, 0)
+    q_transmission   = round(area * 2.5 * delta_t / 1000, 3)
+    q_solar          = round((solar * win_area * 0.87 * (1.3 if sunlight else 0.6)) / 1000, 3)
+    q_fenestration   = round(win_area * 5.8 * delta_t / 1000, 3)
+    q_metabolic      = round(occ_count * 75 / 1000, 3)
+    q_equipment      = round(equip_w * 0.8 / 1000, 3)
+    q_engine_radiant = round((area * 0.4 if eng_adj else 0) / 1000, 3)
+    q_thermal_lag    = round(area * 0.3 * (1.5 if heat_hull else 0.6) / 1000, 3)
+    q_ceiling        = round(ceil_area * 2.0 * delta_t / 1000, 3)
+    q_floor          = round(floor_area * 1.5 * delta_t / 1000, 3)
+    # Magnus formula dew point
+    a, b = 17.27, 237.7
+    alpha   = (a * int_temp / (b + int_temp)) + math.log(max(rh, 1) / 100.0)
+    dew_pt  = round((b * alpha) / (a - alpha), 2)
+    q_latent = round(area * rh * 0.012 / 1000, 3)
+    heating_kw = round(max(target - ext_temp, 0) * area * 0.03 / 1000, 3)
+
+    q_total = q_transmission + q_solar + q_fenestration + q_metabolic + \
+              q_equipment + q_engine_radiant + q_thermal_lag + q_ceiling + \
+              q_floor + q_latent + heating_kw
+
+    # Mode selection
+    margin = int_temp - dew_pt
+    mold_thresh = {"cargo":70,"cruise":65,"navy":60,"hospital":55,"yacht":60}.get(market, 70)
+
+    if ext_temp < target - 3:
+        mode, savings = "EMERGENCY_HEAT", 0.0
+        load_kw = heating_kw
+    elif not occupied and rh > mold_thresh:
+        mode, savings = "MOLD_ALERT", 30.0
+        load_kw = round(q_total * 0.7, 3)
+    elif margin < 2.0:
+        mode, savings = "CORROSION_PREVENTION", 20.0
+        load_kw = round(q_total * 0.8, 3)
+    elif not occupied:
+        mode, savings = "MAINTENANCE_COOLING", 45.0
+        load_kw = round(q_total * 0.55, 3)
+    elif q_total > 3.5:
+        mode, savings = "FULL_COOLING", 0.0
+        load_kw = round(q_total, 3)
+    else:
+        mode, savings = "REDUCED_COOLING", 20.0
+        load_kw = round(q_total * 0.8, 3)
+
+    load_kw = max(load_kw, 0.001)
+    hrs_per_year  = 8760
+    kwh_saved     = (q_total - load_kw) * hrs_per_year
+    roi_inr       = round(kwh_saved * 9.5, 0)
+    co2_kg        = round((q_total - load_kw) * 0.82, 3)
+
+    warnings = []
+    if margin < 2.0:
+        warnings.append(f"CORROSION RISK: Temp-Dew margin only {margin:.1f}°C — condensation imminent")
+    if rh > mold_thresh:
+        warnings.append(f"MOLD ALERT: Humidity {rh:.0f}% exceeds {mold_thresh}% threshold")
+
     return {
-        "mode": "MAINTENANCE_COOLING",
+        "mode": mode,
         "cabin_id": cabin_id,
-        "optimized_load_kw": 1.25,
-        "energy_saved_percent": 45.0,
-        "annual_roi_inr": 1_450_000,
-        "co2_saved_hr_kg": 0.62,
-        "setpoint_actual": 22.0,
-        "weather_source": "mock",
-        "dew_point": 18.4,
-        "warnings": [],
+        "optimized_load_kw": load_kw,
+        "energy_saved_percent": savings,
+        "annual_roi_inr": roi_inr,
+        "co2_saved_hr_kg": co2_kg,
+        "setpoint_actual": target,
+        "weather_source": "local-mock",
+        "dew_point": dew_pt,
+        "warnings": warnings,
         "decision_log": [
-            "=== MAR-HVAC ENGINE MOCK MODE ===",
-            "--- Backend unreachable. Showing demo data. ---",
-            "OK: Ghost Cooling active (PIR: empty)",
-            "OK: Load reduced 45% — anti-mold protocol running",
+            f"=== MAR-HVAC LOCAL ENGINE — {cabin_id} ===",
+            f"--- Ext: {ext_temp}°C  Int: {int_temp}°C  RH: {rh}%  Area: {area}m² ---",
+            f"--- ΔT={delta_t:.1f}°C  Solar={solar}W/m²  Occ={occ_count} ---",
+            f"q_transmission={q_transmission}kW  q_solar={q_solar}kW  q_latent={q_latent}kW",
+            f"q_equipment={q_equipment}kW  q_metabolic={q_metabolic}kW",
+            f"q_total_raw={round(q_total,3)}kW",
+            f"Dew Point={dew_pt}°C  Margin={margin:.1f}°C",
+            f"FINAL MODE: {mode}  Load={load_kw}kW  Saved={savings:.0f}%",
+            f"OK: Annual ROI ₹{roi_inr:,.0f}  CO₂ {co2_kg}kg/hr",
         ],
         "breakdown": {
-            "q_transmission": 0.38, "q_solar": 0.22, "q_fenestration": 0.58,
-            "q_metabolic": 0.0, "q_equipment": 0.18, "q_engine_radiant": 0.0,
-            "q_thermal_lag": 0.21, "q_ceiling": 0.19, "q_floor_conduction": 0.12,
-            "q_latent": 0.94, "heating_load_kw": 0.0,
+            "q_transmission":   q_transmission,
+            "q_solar":          q_solar,
+            "q_fenestration":   q_fenestration,
+            "q_metabolic":      q_metabolic,
+            "q_equipment":      q_equipment,
+            "q_engine_radiant": q_engine_radiant,
+            "q_thermal_lag":    q_thermal_lag,
+            "q_ceiling":        q_ceiling,
+            "q_floor_conduction": q_floor,
+            "q_latent":         q_latent,
+            "heating_load_kw":  heating_kw,
         },
     }
 
@@ -1019,18 +1127,23 @@ def calculate():
         st.session_state["result"]       = result
         st.session_state["api_error"]    = None
         return
-    # Try local engine (no network)
+    # Try local engine (imports backend hvac_engine directly)
     result = run_local_engine(payload)
     if "mode" in result:
         st.session_state["backend_mode"] = "local"
         st.session_state["result"]       = result
         return
-    # Demo-safe mock
+    # Dynamic mock fallback — computes from real slider values
     st.session_state["backend_mode"] = "offline"
-    st.session_state["result"]       = mock_fallback(cabin_id)
+    st.session_state["result"]       = mock_fallback(payload)
 
 
-if run_btn or st.session_state["result"] is None:
+if run_btn:
+    # Always recalculate when button pressed — fresh payload every time
+    with st.spinner("Analysing thermal dynamics…"):
+        calculate()
+elif st.session_state["result"] is None:
+    # First load only
     with st.spinner("Analysing thermal dynamics…"):
         calculate()
 
@@ -1043,7 +1156,8 @@ if fc_btn:
         else:
             st.sidebar.error(d.get("message", "Fetch failed"))
     except Exception:
-        st.sidebar.error("Backend not reachable")
+        # Backend offline — generate forecast locally so chart still works
+        st.sidebar.info("Backend offline — using local forecast buffer")
 
 
 # ─────────────────────────────────────────────────────────────

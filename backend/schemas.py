@@ -26,7 +26,7 @@ class HVACMode(str, Enum):
 class CabinTelemetry(BaseModel):
     cabin_id       : str
     market_segment : str = "cargo"
-    occupancy      : bool
+    occupancy      : bool = False
     occupant_count : int = Field(default=1, ge=0, le=100)
     internal_temp     : float = Field(..., ge=-10.0, le=60.0)
     internal_humidity : float = Field(default=60.0, ge=0.0, le=100.0)
@@ -34,7 +34,7 @@ class CabinTelemetry(BaseModel):
     solar_irradiance  : Optional[float] = None
     cabin_area_m2  : float = Field(default=25.0, ge=0.0, le=2000.0)
     ship_length_m  : float = Field(default=100.0, ge=0.0, le=500.0)
-    window_count   : int = Field(default=1, ge=0, le=50)  # <-- NEW FEATURE
+    window_count   : int = Field(default=1, ge=0, le=50)
     window_area_m2 : float = Field(default=1.5, ge=0.0, le=50.0)
     equipment_wattage : float = Field(default=450.0, ge=0.0, le=10000.0)
     direct_sunlight   : bool = False
