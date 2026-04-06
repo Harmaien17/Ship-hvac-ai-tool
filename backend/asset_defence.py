@@ -45,6 +45,46 @@ def _update_rh_timer(cabin_id: str, rh: float, threshold: float) -> float:
         return 0.0
 
 # ─────────────────────────────────────────────────────────────
+# NEW: HARDWARE GOVERNOR & FAILSAFE OVERRIDE
+# ─────────────────────────────────────────────────────────────
+class HardwareGovernor:
+    def __init__(self):
+        self.MIN_SAFE_TEMP = 18.0  # Celsius (Never freeze the crew)
+        self.MAX_SAFE_TEMP = 30.0  # Celsius (Never overheat the room)
+        self.MAX_TEMP_DROP = 5.0   # Max degrees it can drop in one cycle (Protects chillers)
+        self.is_baseline_mode = False
+
+    def verify_and_safeguard(self, current_temp: float, target_temp: float) -> float:
+        """Acts as the software governor to intercept AI's commands."""
+        logger.info(f"AssetDefence Analyzing: Current={current_temp}°C | AI_Target={target_temp}°C")
+
+        if target_temp < self.MIN_SAFE_TEMP:
+            logger.warning(f"🛡️ FAILSAFE TRIGGERED: Target {target_temp}°C is below safe limit. Throttling to {self.MIN_SAFE_TEMP}°C.")
+            return self.MIN_SAFE_TEMP
+
+        if target_temp > self.MAX_SAFE_TEMP:
+            logger.warning(f"🛡️ FAILSAFE TRIGGERED: Target {target_temp}°C is above safe limit. Throttling to {self.MAX_SAFE_TEMP}°C.")
+            return self.MAX_SAFE_TEMP
+
+        delta = current_temp - target_temp
+        if delta > self.MAX_TEMP_DROP:
+            safe_target = current_temp - self.MAX_TEMP_DROP
+            logger.warning(f"🛡️ FAILSAFE TRIGGERED: Drop of {delta}°C exceeds chiller capacity. Throttling to {safe_target}°C.")
+            return safe_target
+
+        logger.info("✅ Command Cleared. Safe to execute hardware instructions.")
+        return target_temp
+
+    def trigger_hardware_override(self):
+        """Called during a catastrophic software failure to save the ship."""
+        self.is_baseline_mode = True
+        logger.critical("🚨 HARDWARE OVERRIDE INITIATED: Snapping relays back to MANUAL ANALOG BASELINE! 🚨")
+        return "BASELINE_MODE_ACTIVE"
+
+# Global Instance for the API to use
+governor = HardwareGovernor()
+
+# ─────────────────────────────────────────────────────────────
 # RESULT DATACLASS
 # ─────────────────────────────────────────────────────────────
 @dataclass
