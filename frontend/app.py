@@ -967,29 +967,77 @@ for key, default in [
 
 
 # ─────────────────────────────────────────────────────────────
-# STARLINK / BACKEND STATUS
+# HEADER BAR & STARLINK / BACKEND STATUS
 # ─────────────────────────────────────────────────────────────
 
-starlink_status = "⚠️ Backend Offline"
+health   = api_health()
+bm       = st.session_state["backend_mode"]
+bm_color = {"api": "#20a868", "local": "#d08000", "offline": "#c83048"}.get(bm, "#5878a8")
+bm_bg    = {"api": "#c8f0e0", "local": "#fff0c0", "offline": "#fde8ec"}.get(bm, "#e8eef8")
+bm_label = {"api": "● BACKEND LIVE", "local": "◈ LOCAL ENGINE", "offline": "○ OFFLINE (MOCK)"}.get(bm, "?")
+
+weather_label = "○ NO WEATHER"
+weather_color = "#5878a8"
+weather_bg    = "#e8eef8"
+
+# Default Starlink state
+starlink_status = "⚠️ Starlink: Offline"
 starlink_color  = "#c83048"
 starlink_bg     = "#fde8ec"
 cache_age_label = ""
 
-try:
-    if DEMO_MODE:
-        raise Exception("demo mode")
-    health_res = requests.get(f"{BACKEND_URL}/api/v1/health", timeout=2).json()
-    if health_res.get("starlink_active"):
+if health:
+    # Check Starlink status from the backend's /health endpoint
+    if health.get("starlink_active"):
         starlink_status = "🟢 Starlink: Live"
         starlink_color  = "#20a868"
         starlink_bg     = "#c8f0e0"
     else:
-        starlink_status = "🟡 Starlink: Offline — Local Cache"
+        starlink_status = "🟡 Starlink: Offline (Cache)"
         starlink_color  = "#d08000"
         starlink_bg     = "#fff0c0"
-        cache_age_label = f"Cache Age: {health_res.get('cache_age_hours', '?')} hrs"
-except Exception:
-    pass
+        cache_age_label = f"Cache Age: {health.get('cache_age_hours', '?')} hrs"
+
+    wc = health.get("weather_cache", {})
+    fb = health.get("forecast_buffer", {})
+    if wc.get("status") == "cache":
+        weather_label = f"● LIVE {wc.get('temp_c', '?')}°C"
+        weather_color = "#20a868"
+        weather_bg    = "#c8f0e0"
+    elif fb.get("available"):
+        weather_label = f"◈ FORECAST {fb.get('age_hours', '?'):.0f}h OLD"
+        weather_color = "#d08000"
+        weather_bg    = "#fff0c0"
+    else:
+        weather_label = "○ FAILSAFE"
+        weather_color = "#c83048"
+        weather_bg    = "#fde8ec"
+
+st.markdown(f"""
+<div style="background:linear-gradient(120deg,#ffffff 55%,#f0eaff);
+            border:1.5px solid #c8d8f0; border-left:5px solid #7a4fc0;
+            border-radius:12px; padding:14px 20px; margin-bottom:14px;
+            display:flex; justify-content:space-between; align-items:center;
+            box-shadow:0 4px 20px rgba(122,79,192,0.12);">
+  <div>
+    <div style="font-family:'Nunito',sans-serif; font-size:1.25rem; font-weight:900;
+                color:#5a3898; letter-spacing:0.02em;">🚢 MAR-HVAC AI — COMMAND CENTER</div>
+    <div style="font-family:'DM Mono',monospace; font-size:0.58rem; color:#5878a8;
+                letter-spacing:0.16em; margin-top:2px;">
+      INTELLIGENT HEAT LOAD OPTIMISATION &nbsp;|&nbsp; NODE: {BACKEND_URL}
+    </div>
+  </div>
+  
+  <div style="text-align: right;">
+    <div style="background:{starlink_bg}; border:1.5px solid {starlink_color}; color:{starlink_color};
+                padding:6px 14px; border-radius:20px; font-family:'Nunito',sans-serif;
+                font-size:0.75rem; font-weight:900; letter-spacing:0.05em;
+                box-shadow:0 2px 8px rgba(0,0,0,0.04); display:inline-block;">
+      {starlink_status}
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1190,54 +1238,6 @@ if fc_btn:
     except Exception:
         # Backend offline — generate forecast locally so chart still works
         st.sidebar.info("Backend offline — using local forecast buffer")
-
-
-# ─────────────────────────────────────────────────────────────
-# HEADER BAR
-# ─────────────────────────────────────────────────────────────
-
-health   = api_health()
-bm       = st.session_state["backend_mode"]
-bm_color = {"api": "#20a868", "local": "#d08000", "offline": "#c83048"}.get(bm, "#5878a8")
-bm_bg    = {"api": "#c8f0e0", "local": "#fff0c0", "offline": "#fde8ec"}.get(bm, "#e8eef8")
-bm_label = {"api": "● BACKEND LIVE", "local": "◈ LOCAL ENGINE", "offline": "○ OFFLINE (MOCK)"}.get(bm, "?")
-
-weather_label = "○ NO WEATHER"
-weather_color = "#5878a8"
-weather_bg    = "#e8eef8"
-if health:
-    wc = health.get("weather_cache", {})
-    fb = health.get("forecast_buffer", {})
-    if wc.get("status") == "cache":
-        weather_label = f"● LIVE {wc.get('temp_c', '?')}°C"
-        weather_color = "#20a868"
-        weather_bg    = "#c8f0e0"
-    elif fb.get("available"):
-        weather_label = f"◈ FORECAST {fb.get('age_hours', '?'):.0f}h OLD"
-        weather_color = "#d08000"
-        weather_bg    = "#fff0c0"
-    else:
-        weather_label = "○ FAILSAFE"
-        weather_color = "#c83048"
-        weather_bg    = "#fde8ec"
-
-st.markdown(f"""
-<div style="background:linear-gradient(120deg,#ffffff 55%,#f0eaff);
-            border:1.5px solid #c8d8f0; border-left:5px solid #7a4fc0;
-            border-radius:12px; padding:14px 20px; margin-bottom:14px;
-            display:flex; justify-content:space-between; align-items:center;
-            box-shadow:0 4px 20px rgba(122,79,192,0.12);">
-  <div>
-    <div style="font-family:'Nunito',sans-serif; font-size:1.25rem; font-weight:900;
-                color:#5a3898; letter-spacing:0.02em;">🚢 MAR-HVAC AI — COMMAND CENTER</div>
-    <div style="font-family:'DM Mono',monospace; font-size:0.58rem; color:#5878a8;
-                letter-spacing:0.16em; margin-top:2px;">
-      INTELLIGENT HEAT LOAD OPTIMISATION &nbsp;|&nbsp; NODE: {BACKEND_URL}
-    </div>
-  </div>
-  <!-- status badges hidden for screen recording -->
-</div>
-""", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────
