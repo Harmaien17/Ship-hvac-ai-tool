@@ -47,8 +47,7 @@ Open a terminal in the root directory, activate your virtual environment, and st
 python -m uvicorn backend.main:app --reload
 
 
-### 1. Initialize the AI Engine (Backend)
+### 1. Initialize the MAR HVAC AI TOOL (Frontend)
 Open a terminal in the root directory, activate your virtual environment, and boot streamlit dashboard:
-```bash
 cd frontend
 streamlit run app.py
