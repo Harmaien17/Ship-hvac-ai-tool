@@ -16,6 +16,8 @@ Features merged from both versions:
   - Starlink / weather / backend status indicators
   - HP Pavilion 4GB RAM optimised (local fallback engine)
   - 1080p polished layout — no overflow
+  - ROUND 2 UPGRADE: Dual-Persona Dashboard (Engineer vs CFO)
+  - ROUND 3 UPGRADE: ESG / Carbon Credit Monetization Engine
 
 Run with:
   cd frontend
@@ -60,8 +62,6 @@ st.set_page_config(
 
 # ─────────────────────────────────────────────────────────────
 # AUTOCAD PDF PARSER  (full production version — runs locally)
-# Merged: v1 simple regex + v2 extended patterns (mm, L×W,
-# ceiling, window, material, u-value)
 # ─────────────────────────────────────────────────────────────
 
 def parse_ship_drawing_locally(pdf_bytes: bytes, cabin_hint: str = "") -> dict:
@@ -191,7 +191,6 @@ def parse_ship_drawing_locally(pdf_bytes: bytes, cabin_hint: str = "") -> dict:
 
 # ─────────────────────────────────────────────────────────────
 # MAR-CHAT  (rule-based HVAC explainer — no API keys needed)
-# Merged: v1 basic Q&A + v2 extended with dew point, ROI, CO₂
 # ─────────────────────────────────────────────────────────────
 
 def ask_mar_chat_local(question: str, last_decision: Optional[dict]) -> str:
@@ -208,7 +207,6 @@ def ask_mar_chat_local(question: str, last_decision: Optional[dict]) -> str:
     roi   = last_decision.get("annual_roi_inr", None)
     co2   = last_decision.get("co2_saved_hr_kg", None)
 
-    # Why / reason / trigger
     if any(w in q for w in ["why", "reason", "cause", "trigger"]):
         if mode == "MAINTENANCE_COOLING":
             return (f"{cid} is in Ghost Cooling — PIR sensor shows cabin is empty. "
@@ -229,28 +227,24 @@ def ask_mar_chat_local(question: str, last_decision: Optional[dict]) -> str:
                     f"High external temp, direct solar gain, occupant heat, and equipment load all contribute.")
         return f"System is in {mode.replace('_',' ')} based on current thermal gradients and occupancy status."
 
-    # Energy / savings / ROI
     if any(w in q for w in ["save", "saving", "roi", "money", "cost", "energy"]):
         roi_line = f" Annual ROI: ₹{roi:,.0f}." if roi else ""
         co2_line = f" CO₂ saved: {co2} kg/hr." if co2 else ""
         return (f"Saving {sav:.1f}% vs full load. Optimised at {load:.3f} kW.{roi_line}{co2_line} "
                 f"Ghost Cooling is the primary saving mechanism for empty cabins (40–50% reduction).")
 
-    # Safety / status
     if any(w in q for w in ["safe", "ok", "normal", "fine", "status"]):
         if warns:
             return f"Attention required: {warns[0]}"
         return (f"{cid} operating normally in {mode.replace('_', ' ')} mode at {load:.3f} kW. "
                 f"No warnings. All readings within safe limits.")
 
-    # Default
     return (f"{cid} → {mode.replace('_', ' ')} mode at {load:.3f} kW ({sav:.0f}% saved). "
             f"Ask me: why this mode, energy savings, ROI, corrosion risk, or safety status.")
 
 
 # ─────────────────────────────────────────────────────────────
 # CSS — SOFT MARITIME DAYLIGHT + 1080p POLISH
-# Merged: v1 foundations + v2 complete design system
 # ─────────────────────────────────────────────────────────────
 
 st.markdown("""
@@ -967,29 +961,77 @@ for key, default in [
 
 
 # ─────────────────────────────────────────────────────────────
-# STARLINK / BACKEND STATUS
+# HEADER BAR & STARLINK / BACKEND STATUS
 # ─────────────────────────────────────────────────────────────
 
-starlink_status = "⚠️ Backend Offline"
+health   = api_health()
+bm       = st.session_state["backend_mode"]
+bm_color = {"api": "#20a868", "local": "#d08000", "offline": "#c83048"}.get(bm, "#5878a8")
+bm_bg    = {"api": "#c8f0e0", "local": "#fff0c0", "offline": "#fde8ec"}.get(bm, "#e8eef8")
+bm_label = {"api": "● BACKEND LIVE", "local": "◈ LOCAL ENGINE", "offline": "○ OFFLINE (MOCK)"}.get(bm, "?")
+
+weather_label = "○ NO WEATHER"
+weather_color = "#5878a8"
+weather_bg    = "#e8eef8"
+
+# Default Starlink state
+starlink_status = "⚠️ Starlink: Offline"
 starlink_color  = "#c83048"
 starlink_bg     = "#fde8ec"
 cache_age_label = ""
 
-try:
-    if DEMO_MODE:
-        raise Exception("demo mode")
-    health_res = requests.get(f"{BACKEND_URL}/api/v1/health", timeout=2).json()
-    if health_res.get("starlink_active"):
+if health:
+    # Check Starlink status from the backend's /health endpoint
+    if health.get("starlink_active"):
         starlink_status = "🟢 Starlink: Live"
         starlink_color  = "#20a868"
         starlink_bg     = "#c8f0e0"
     else:
-        starlink_status = "🟡 Starlink: Offline — Local Cache"
+        starlink_status = "🟡 Starlink: Offline (Cache)"
         starlink_color  = "#d08000"
         starlink_bg     = "#fff0c0"
-        cache_age_label = f"Cache Age: {health_res.get('cache_age_hours', '?')} hrs"
-except Exception:
-    pass
+        cache_age_label = f"Cache Age: {health.get('cache_age_hours', '?')} hrs"
+
+    wc = health.get("weather_cache", {})
+    fb = health.get("forecast_buffer", {})
+    if wc.get("status") == "cache":
+        weather_label = f"● LIVE {wc.get('temp_c', '?')}°C"
+        weather_color = "#20a868"
+        weather_bg    = "#c8f0e0"
+    elif fb.get("available"):
+        weather_label = f"◈ FORECAST {fb.get('age_hours', '?'):.0f}h OLD"
+        weather_color = "#d08000"
+        weather_bg    = "#fff0c0"
+    else:
+        weather_label = "○ FAILSAFE"
+        weather_color = "#c83048"
+        weather_bg    = "#fde8ec"
+
+st.markdown(f"""
+<div style="background:linear-gradient(120deg,#ffffff 55%,#f0eaff);
+            border:1.5px solid #c8d8f0; border-left:5px solid #7a4fc0;
+            border-radius:12px; padding:14px 20px; margin-bottom:14px;
+            display:flex; justify-content:space-between; align-items:center;
+            box-shadow:0 4px 20px rgba(122,79,192,0.12);">
+  <div>
+    <div style="font-family:'Nunito',sans-serif; font-size:1.25rem; font-weight:900;
+                color:#5a3898; letter-spacing:0.02em;">🚢 MAR-HVAC AI — COMMAND CENTER</div>
+    <div style="font-family:'DM Mono',monospace; font-size:0.58rem; color:#5878a8;
+                letter-spacing:0.16em; margin-top:2px;">
+      INTELLIGENT HEAT LOAD OPTIMISATION &nbsp;|&nbsp; NODE: {BACKEND_URL}
+    </div>
+  </div>
+  
+  <div style="text-align: right;">
+    <div style="background:{starlink_bg}; border:1.5px solid {starlink_color}; color:{starlink_color};
+                padding:6px 14px; border-radius:20px; font-family:'Nunito',sans-serif;
+                font-size:0.75rem; font-weight:900; letter-spacing:0.05em;
+                box-shadow:0 2px 8px rgba(0,0,0,0.04); display:inline-block;">
+      {starlink_status}
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1009,6 +1051,16 @@ with st.sidebar:
     # Status pill hidden for screen recording — logic & variables preserved above
     pass
 
+    st.markdown("---")
+    
+    # ── ROUND 2 FEATURE: DUAL-PERSONA TOGGLE ──
+    st.markdown('<div class="section-label">👁️ DASHBOARD PERSONA</div>', unsafe_allow_html=True)
+    persona_mode = st.radio(
+        "Select View:",
+        ["🛠️ Chief Engineer", "💼 Fleet CFO"],
+        label_visibility="collapsed"
+    )
+    
     st.markdown("---")
 
     # ── AutoCAD Parser ────────────────────────────────────────
@@ -1193,54 +1245,6 @@ if fc_btn:
 
 
 # ─────────────────────────────────────────────────────────────
-# HEADER BAR
-# ─────────────────────────────────────────────────────────────
-
-health   = api_health()
-bm       = st.session_state["backend_mode"]
-bm_color = {"api": "#20a868", "local": "#d08000", "offline": "#c83048"}.get(bm, "#5878a8")
-bm_bg    = {"api": "#c8f0e0", "local": "#fff0c0", "offline": "#fde8ec"}.get(bm, "#e8eef8")
-bm_label = {"api": "● BACKEND LIVE", "local": "◈ LOCAL ENGINE", "offline": "○ OFFLINE (MOCK)"}.get(bm, "?")
-
-weather_label = "○ NO WEATHER"
-weather_color = "#5878a8"
-weather_bg    = "#e8eef8"
-if health:
-    wc = health.get("weather_cache", {})
-    fb = health.get("forecast_buffer", {})
-    if wc.get("status") == "cache":
-        weather_label = f"● LIVE {wc.get('temp_c', '?')}°C"
-        weather_color = "#20a868"
-        weather_bg    = "#c8f0e0"
-    elif fb.get("available"):
-        weather_label = f"◈ FORECAST {fb.get('age_hours', '?'):.0f}h OLD"
-        weather_color = "#d08000"
-        weather_bg    = "#fff0c0"
-    else:
-        weather_label = "○ FAILSAFE"
-        weather_color = "#c83048"
-        weather_bg    = "#fde8ec"
-
-st.markdown(f"""
-<div style="background:linear-gradient(120deg,#ffffff 55%,#f0eaff);
-            border:1.5px solid #c8d8f0; border-left:5px solid #7a4fc0;
-            border-radius:12px; padding:14px 20px; margin-bottom:14px;
-            display:flex; justify-content:space-between; align-items:center;
-            box-shadow:0 4px 20px rgba(122,79,192,0.12);">
-  <div>
-    <div style="font-family:'Nunito',sans-serif; font-size:1.25rem; font-weight:900;
-                color:#5a3898; letter-spacing:0.02em;">🚢 MAR-HVAC AI — COMMAND CENTER</div>
-    <div style="font-family:'DM Mono',monospace; font-size:0.58rem; color:#5878a8;
-                letter-spacing:0.16em; margin-top:2px;">
-      INTELLIGENT HEAT LOAD OPTIMISATION &nbsp;|&nbsp; NODE: {BACKEND_URL}
-    </div>
-  </div>
-  <!-- status badges hidden for screen recording -->
-</div>
-""", unsafe_allow_html=True)
-
-
-# ─────────────────────────────────────────────────────────────
 # MAIN DASHBOARD
 # ─────────────────────────────────────────────────────────────
 
@@ -1264,7 +1268,7 @@ if result and "mode" in result:
     co2_kg   = result.get("co2_saved_hr_kg", None)
 
     # ── Alert banners ─────────────────────────────────────────
-    # First pass: big dramatic banners for Corrosion & Mold
+    # Show critical alerts to both personas
     if mode == "CORROSION_PREVENTION" or any("CORROSION" in w for w in warns):
         corrosion_msg = next((w for w in warns if "CORROSION" in w),
                              "Internal temperature near dew point — hull condensation risk is HIGH.")
@@ -1301,10 +1305,9 @@ if result and "mode" in result:
         </div>
         """, unsafe_allow_html=True)
 
-    # Second pass: smaller utility banners for other warn types
     for w in warns:
         if "CORROSION" in w or "MOLD" in w:
-            continue  # already shown above as big banners
+            continue
         if "HOSPITAL" in w or "MEDICINE" in w:
             st.markdown(f'<div class="alert-red">🏥 {w}</div>', unsafe_allow_html=True)
         elif "FAILSAFE" in w or "STALE" in w:
@@ -1316,382 +1319,437 @@ if result and "mode" in result:
         st.markdown('<div class="alert-blue">🌨️ HEATING MODE ACTIVE — Arctic/cold route detected.</div>',
                     unsafe_allow_html=True)
 
-    # ── ■ ROI BANNER ─────────────────────────────────────────
+# ── ROUND 3 FEATURE: ESG & CARBON CREDIT MONETIZATION ──
     if roi_inr is not None:
-        roi_str    = f"₹{roi_inr:,.0f}"
-        co2_str    = f" &nbsp;·&nbsp; 🌿 CO₂ saved: {co2_kg} kg/hr" if co2_kg else ""
-        saving_kwh = round(load_kw * savings / 100, 3)
-        st.markdown(f"""
-        <div class="roi-banner">
-          <div class="roi-banner-icon">💰</div>
-          <div>
-            <div class="roi-banner-text">■ {roi_str} saved per year at this load level</div>
-            <div class="roi-banner-sub">
-              {load_kw:.3f} kW optimised &nbsp;·&nbsp; {savings:.1f}% reduction
-              &nbsp;·&nbsp; {saving_kwh:.3f} kW freed vs full load{co2_str}
-            </div>
-          </div>
+        # Calculate Annual Carbon Credits (1 Credit = 1 Tonne of CO2)
+        annual_co2_tonnes = (co2_kg * 24 * 365) / 1000
+        carbon_credits_earned = int(annual_co2_tonnes)
+        # Assume carbon credits trade at ~₹4,000 INR ($50 USD) per tonne on the open market
+        esg_revenue_inr = carbon_credits_earned * 4000 
+        total_financial_impact = roi_inr + esg_revenue_inr
+
+        if persona_mode == "💼 Fleet CFO":
+            # CFO VIEW: Focus strictly on money, ESG, and high-level ROI
+            st.markdown(f"""
+<div style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); padding: 25px; border-radius: 15px; color: white; margin-bottom: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.15);">
+    <h2 style="color: #6ed8b0; margin-top: 0; font-family:'Nunito',sans-serif;">💰 CFO Executive Summary</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; flex-wrap: wrap; gap: 15px;">
+        <div>
+            <div style="font-size: 0.9rem; color: #a8c0e0; text-transform: uppercase; letter-spacing: 2px; font-family:'Nunito',sans-serif;">Total Annual Financial Impact</div>
+            <div style="font-size: 3rem; font-weight: 900; line-height: 1.1; font-family:'DM Mono',monospace;">₹{total_financial_impact:,.0f}</div>
+            <div style="font-size: 0.85rem; color: #e0d4f8; margin-top: 5px; font-family:'Nunito',sans-serif;">Per Cabin Optimized</div>
         </div>
-        """, unsafe_allow_html=True)
+        <div style="background: rgba(255,255,255,0.1); padding: 15px 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2);">
+            <div style="font-size: 0.8rem; color: #6ed8b0; text-transform: uppercase; font-family:'Nunito',sans-serif;">🌿 ESG Carbon Monetization</div>
+            <div style="font-size: 1.5rem; font-weight: bold; font-family:'DM Mono',monospace;">{carbon_credits_earned} Credits Earned</div>
+            <div style="font-size: 1rem; font-family:'Nunito',sans-serif;">Est. Value: ₹{esg_revenue_inr:,.0f}</div>
+        </div>
+    </div>
+    <div style="margin-top: 20px; font-family: 'DM Mono',monospace; font-size: 0.8rem; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 10px;">
+        Direct Fuel Savings: ₹{roi_inr:,.0f} | ESG Revenue Offset: ₹{esg_revenue_inr:,.0f} | Compliance Status: IMO 2030 Ready
+    </div>
+</div>
 
-    # ── Top Metrics Row ───────────────────────────────────────
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.markdown(f"""
-        <div class="metric-box" style="border-top:3px solid #7a4fc0;">
-          <div class="metric-lbl">Optimised Load</div>
-          <div class="metric-val">{load_kw:.3f} <span style="font-size:0.9rem;">kW</span></div>
-        </div>""", unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""
-        <div class="metric-box" style="border-top:3px solid #1e80cc;">
-          <div class="metric-lbl">HVAC Mode</div>
-          <div class="metric-val" style="font-size:0.92rem; padding-top:6px; color:#1e80cc;">
-            {mode.replace("_", " ")}
-          </div>
-        </div>""", unsafe_allow_html=True)
-    with c3:
-        roi_display = f"₹{roi_inr:,.0f}" if roi_inr is not None else "—"
-        st.markdown(f"""
-        <div class="metric-box" style="border-top:3px solid #20a868;">
-          <div class="metric-lbl">Annual ROI</div>
-          <div class="metric-val" style="color:#20a868;">{roi_display}</div>
-        </div>""", unsafe_allow_html=True)
-    with c4:
-        co2_display = f"{co2_kg} kg" if co2_kg is not None else "—"
-        st.markdown(f"""
-        <div class="metric-box" style="border-top:3px solid #18b098;">
-          <div class="metric-lbl">CO₂ Saved / hr</div>
-          <div class="metric-val" style="color:#18b098;">{co2_display}</div>
-        </div>""", unsafe_allow_html=True)
-
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-
-    # ── Row 2: Load + Savings + Ship Status ──────────────────
-    col_load, col_sav, col_status = st.columns([2, 1, 1])
-
-    with col_load:
-        num_class = "load-number heating" if is_heat else "load-number"
-        box_class = "load-box heating-mode" if is_heat else "load-box"
-        st.markdown(f"""
-        <div class="{box_class}">
-          <div class="section-label">// OPTIMISED HVAC LOAD</div>
-          <div class="{num_class}">{load_kw:.3f}</div>
-          <div class="load-unit">kilowatts</div>
-          <div><span class="mode-badge mode-{mode}">{mode.replace("_", " ")}</span></div>
-          <div style="margin-top:10px; font-family:'DM Mono',monospace; font-size:0.62rem;
-                      color:#5878a8; letter-spacing:0.07em;">
-            SETPOINT: {setpoint:.1f}°C &nbsp;·&nbsp; {cabin_id} &nbsp;·&nbsp;
-            SRC: {wx_src.upper()} &nbsp;·&nbsp; SEG: {market.upper()} &nbsp;·&nbsp; {ship_length}m
-          </div>
-        </div>""", unsafe_allow_html=True)
-
-    with col_sav:
-        # Ghost Cooling triggers on MAINTENANCE_COOLING (mock/fixed engine) OR STANDBY (live engine)
-        ghost_active = mode in ("MAINTENANCE_COOLING", "STANDBY")
-        sav_border   = "#d08000" if ghost_active else ("#2a68e0" if is_heat else "#20a868")
-        sav_color    = "#d08000" if ghost_active else ("#2a68e0" if is_heat else "#20a868")
-        sav_bg       = "#fff9ed" if ghost_active else ("#eef2ff" if is_heat else "#edfdf5")
-        sav_icon     = "⚙️" if ghost_active else ("🌨️" if is_heat else "⚡")
-        sav_label    = "GHOST PROTOCOL" if ghost_active else ("HEATING MODE" if is_heat else "ENERGY SAVED")
-
-        st.markdown(f"""
-        <div class="savings-box" style="border-top-color:{sav_border};
-             background:linear-gradient(145deg,#fff,{sav_bg});">
-          <div class="section-label">// {sav_label}</div>
-          <div class="savings-number" style="color:{sav_color};">{sav_icon} {savings:.1f}%</div>
-          <div style="font-family:'DM Mono',monospace; font-size:0.64rem;
-                      color:#5878a8; margin-top:5px;">vs full-load baseline</div>
-        </div>""", unsafe_allow_html=True)
-
-        st.markdown("<div style='height:7px'></div>", unsafe_allow_html=True)
-
-        # Mode-specific sub-panel
-        if mode in ("MAINTENANCE_COOLING", "STANDBY"):
-            st.markdown(f"""
-            <div style="background:#fffbf0; border:1.5px solid #f0d060;
-                        border-left:4px solid #d08000; border-radius:9px; padding:10px;">
-              <div style="font-family:'Nunito',sans-serif; font-size:0.70rem;
-                          font-weight:800; color:#906000;">⚙️ GHOST COOLING ACTIVE</div>
-              <div style="font-family:'DM Mono',monospace; font-size:0.68rem;
-                          color:#385070; margin-top:4px;">
-                Empty cabin · {100-savings:.0f}% load · {setpoint:.1f}°C setpoint
-              </div>
-            </div>""", unsafe_allow_html=True)
-        elif mode == "CORROSION_PREVENTION":
-            st.markdown("""
-            <div style="background:#fff0f2; border:1.5px solid #f0a0b0;
-                        border-left:4px solid #c83048; border-radius:9px; padding:10px;">
-              <div style="font-family:'Nunito',sans-serif; font-size:0.70rem;
-                          font-weight:800; color:#c83048;">🚨 CORROSION PREVENTION</div>
-              <div style="font-family:'DM Mono',monospace; font-size:0.68rem;
-                          color:#385070; margin-top:4px;">Fans 30% · Hull condensation risk</div>
-            </div>""", unsafe_allow_html=True)
-        elif mode == "MOLD_ALERT":
-            st.markdown("""
-            <div style="background:#fffbf0; border:1.5px solid #f0d060;
-                        border-left:4px solid #d08000; border-radius:9px; padding:10px;">
-              <div style="font-family:'Nunito',sans-serif; font-size:0.70rem;
-                          font-weight:800; color:#906000;">⚠ MOLD ALERT</div>
-              <div style="font-family:'DM Mono',monospace; font-size:0.68rem;
-                          color:#385070; margin-top:4px;">Dehumidification · Ventilation ↑</div>
-            </div>""", unsafe_allow_html=True)
+<div style="display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;">
+    <div style="flex: 1; min-width: 300px; background: #ffffff; border: 1.5px solid #c8d8f0; border-top: 4px solid #20a868; border-radius: 12px; padding: 20px; box-shadow: 0 4px 16px rgba(122,79,192,0.08);">
+        <h4 style="color: #1a2840; margin-top: 0; font-family: 'Nunito', sans-serif; font-size: 1.05rem;">📈 ROI Calculation Matrix</h4>
+        <ul style="font-family: 'DM Mono', monospace; font-size: 0.75rem; color: #385070; line-height: 1.7; padding-left: 20px; margin-bottom: 0;">
+            <li><b>Baseline Fuel Cost:</b> Calculated using global Marine Diesel Oil (MDO) averages at approx. <b>₹9.5 per electrical kWh</b> generated.</li>
+            <li><b>Fuel Savings (INR):</b> (Baseline kW - AI Optimized kW) × 8,760 hours × ₹9.5/kWh.</li>
+            <li><b>Carbon Market Value:</b> 1 Carbon Credit = 1 Metric Tonne of CO₂ mitigated.</li>
+            <li><b>ESG Revenue:</b> Traded at an estimated open-market floor price of <b>₹4,000 ($50 USD)</b> per credit.</li>
+        </ul>
+    </div>
+    <div style="flex: 1; min-width: 300px; background: #ffffff; border: 1.5px solid #c8d8f0; border-top: 4px solid #1e80cc; border-radius: 12px; padding: 20px; box-shadow: 0 4px 16px rgba(122,79,192,0.08);">
+        <h4 style="color: #1a2840; margin-top: 0; font-family: 'Nunito', sans-serif; font-size: 1.05rem;">⚖️ Regulatory Compliance (IMO 2030)</h4>
+        <p style="font-family: 'DM Mono', monospace; font-size: 0.75rem; color: #385070; line-height: 1.7; margin-bottom: 0;">
+            The International Maritime Organization (IMO) mandates a strict <b>40% reduction in carbon intensity by 2030</b>.<br><br>
+            Mar-HVAC AI directly improves your vessel's <b>Carbon Intensity Indicator (CII)</b> rating by eliminating "Ghost Cooling" waste. This prevents heavy regulatory fines and protects fleet assets from forced slow-steaming penalties, ensuring long-term operational legality.
+        </p>
+    </div>
+</div>
+            """, unsafe_allow_html=True)
+            
+            st.info("📊 Technical telemetry hidden in CFO View. Switch to 'Chief Engineer' via the sidebar to view raw thermodynamic data and failsafe logs.")
+            st.stop() # Stops rendering the rest of the highly technical UI
+            st.info("📊 Technical telemetry hidden in CFO View. Switch to 'Chief Engineer' via the sidebar to view raw thermodynamic data and failsafe logs.")
         else:
-            occ_color  = "#20a868" if occupancy else "#d08000"
-            occ_bg     = "#edfdf5" if occupancy else "#fffbf0"
-            occ_border = "#80d0a8" if occupancy else "#f0d060"
-            occ_label  = "OCCUPIED — FULL COMFORT" if occupancy else "EMPTY — MONITORING"
+            # ENGINEER VIEW: Show the standard technical ROI banner
+            roi_str    = f"₹{roi_inr:,.0f}"
+            saving_kwh = round(load_kw * savings / 100, 3)
             st.markdown(f"""
-            <div style="background:{occ_bg}; border:1.5px solid {occ_border};
-                        border-left:4px solid {occ_color}; border-radius:9px; padding:10px;">
-              <div style="font-family:'Nunito',sans-serif; font-size:0.70rem;
-                          font-weight:800; color:{occ_color};">
-                {'✓' if occupancy else '○'} {occ_label}
+            <div class="roi-banner">
+              <div class="roi-banner-icon">⚙️</div>
+              <div>
+                <div class="roi-banner-text">■ System Operating at {load_kw:.3f} kW ({savings:.1f}% Reduction)</div>
+                <div class="roi-banner-sub">
+                  Fuel Savings: {roi_str}/yr &nbsp;·&nbsp; ESG: {carbon_credits_earned} Carbon Credits Generated
+                </div>
               </div>
-              <div style="font-family:'DM Mono',monospace; font-size:0.68rem;
-                          color:#385070; margin-top:4px;">
-                {occ_count} occupants · {setpoint:.1f}°C
-              </div>
-            </div>""", unsafe_allow_html=True)
-
-    with col_status:
-        st.markdown('<div class="section-label">// SHIP DYNAMICS</div>', unsafe_allow_html=True)
-        for label, active, on_txt, off_txt, act_color, act_bg in [
-            ("☀️ Direct Sun",  direct_sunlight,  "ACTIVE",   "NONE",   "#c83048", "#fff0f2"),
-            ("🔥 Hull Soaked", heat_soaked_hull, "ACTIVE",   "NORMAL", "#c83048", "#fff0f2"),
-            ("⚙️ Engine Adj",  engine_adjacent,  "ACTIVE",   "CLEAR",  "#f07050", "#fff8f5"),
-            ("🧍 Occupancy",   occupancy,         "OCCUPIED", "EMPTY",  "#20a868", "#edfdf5"),
-        ]:
-            txt   = on_txt if active else off_txt
-            color = act_color if active else "#5878a8"
-            bg    = act_bg   if active else "#f2f6fc"
-            st.markdown(f"""
-            <div class="status-row" style="background:{bg};">
-              <span class="label-muted">{label}</span>
-              <span style="color:{color}; font-weight:700; font-size:0.72rem;">{txt}</span>
-            </div>""", unsafe_allow_html=True)
-
-        st.markdown("<div style='height:5px'></div>", unsafe_allow_html=True)
-
-        if dew_pt is not None:
-            margin   = internal_temp - dew_pt
-            dp_color = "#c83048" if margin < 1.0 else ("#d08000" if margin < 3.0 else "#20a868")
-            st.markdown(f"""
-            <div class="status-row">
-              <span class="label-muted">💧 Dew Pt</span>
-              <span style="color:{dp_color}; font-weight:700;">{dew_pt:.1f}°C</span>
             </div>
-            <div class="status-row">
-              <span class="label-muted">📏 Margin</span>
-              <span style="color:{dp_color}; font-weight:700;">{margin:.1f}°C</span>
-            </div>""", unsafe_allow_html=True)
-
-        ext_disp = f"{external_temp:.1f}°C" if manual_weather and external_temp else "AUTO"
-        for lbl, val in [
-            ("🌡️ Ext",   ext_disp),
-            ("💧 RH",    f"{internal_rh:.0f}%"),
-            ("🏢 Seg",   market.upper()),
-            ("🚢 Ship",  f"{ship_length}m"),
-            ("🪟 Win",   f"{window_area:.1f}m²"),
-            ("🔌 Equip", f"{equip_watts}W"),
-        ]:
-            st.markdown(f"""
-            <div class="status-row">
-              <span class="label-muted">{lbl}</span>
-              <span style="color:#1e80cc; font-weight:700;">{val}</span>
-            </div>""", unsafe_allow_html=True)
-
-    st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
-
-    # ── Row 3: AI Decision Log + 11-Bar Heat Breakdown ────────
-    col_log, col_chart = st.columns([3, 2])
-
-    with col_log:
-        st.markdown('<div class="section-label">// AI DECISION LOG — REASONING TRACE</div>',
-                    unsafe_allow_html=True)
-        log_lines = result.get("decision_log", ["No log available."])
-        log_html  = colorise_log(log_lines)
-        ts        = time.strftime("%H:%M:%S")
-        st.markdown(f"""
-        <div class="decision-log">
-<span class="log-header">MAR-HVAC ENGINE — {ts} — {cabin_id}</span>
-
-{log_html}
-        </div>""", unsafe_allow_html=True)
-
-        # ── MAR-Chat ─────────────────────────────────────────
-        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-        st.markdown('<div class="section-label">// MAR-CHAT — ASK THE AI</div>',
-                    unsafe_allow_html=True)
-        chat_col1, chat_col2 = st.columns([5, 1])
-        with chat_col1:
-            chat_q = st.text_input(
-                "Ask a question about this HVAC decision",
-                placeholder="e.g. Why is this mode active? How much am I saving?",
-                label_visibility="collapsed",
-            )
-        with chat_col2:
-            chat_btn = st.button("Ask →", use_container_width=True)
-
-        if chat_btn and chat_q.strip():
-            st.session_state["chat_response"] = ask_mar_chat_local(chat_q, result)
-
-        if st.session_state["chat_response"]:
-            st.markdown(f"""
-            <div class="mar-chat-box">🤖 {st.session_state["chat_response"]}</div>
             """, unsafe_allow_html=True)
 
-    with col_chart:
-        st.markdown('<div class="section-label">// HEAT LOAD BREAKDOWN — 11 VARIABLES (kW)</div>',
-                    unsafe_allow_html=True)
-        bd = result.get("breakdown", {})
-        labels = [
-            "Wall Transmission", "Solar (Porthole)",    "Fenestration (Windows)",
-            "Metabolic (People)", "Equipment",           "Engine Radiant",
-            "Thermal Lag",        "Ceiling (Solar-Air)", "Floor Conduction",
-            "Latent (Salt Air)",  "Heating Load",
-        ]
-        values = [
-            bd.get("q_transmission", 0),  bd.get("q_solar", 0),        bd.get("q_fenestration", 0),
-            bd.get("q_metabolic", 0),     bd.get("q_equipment", 0),    bd.get("q_engine_radiant", 0),
-            bd.get("q_thermal_lag", 0),   bd.get("q_ceiling", 0),      bd.get("q_floor_conduction", 0),
-            bd.get("q_latent", 0),        bd.get("heating_load_kw", 0),
-        ]
-        bar_colors = [
-            "#6ab8e8", "#f8c820", "#7a4fc0", "#6ed8b0", "#9880d8",
-            "#f07050", "#f8a888", "#f8c820", "#6ed8b0", "#9880d8", "#6ab8e8",
-        ]
-        fig = go.Figure(go.Bar(
-            x=values, y=labels, orientation="h",
-            marker=dict(color=bar_colors, line=dict(color="#c8d8f0", width=1)),
-            text=[f"{v:.3f}" for v in values],
-            textposition="outside",
-            textfont=dict(family="DM Mono", size=8, color="#385070"),
-        ))
-        fig.add_vline(
-            x=load_kw, line_dash="dash", line_color="#7a4fc0", line_width=1.5,
-            annotation_text=f"Opt: {load_kw:.3f}kW",
-            annotation_font=dict(color="#7a4fc0", size=8, family="DM Mono"),
-            annotation_position="top right",
-        )
-        fig.update_layout(
-            paper_bgcolor="#ffffff", plot_bgcolor="#f2f6fc",
-            font=dict(family="DM Mono", size=8, color="#5878a8"),
-            margin=dict(l=10, r=65, t=8, b=16), height=340,
-            xaxis=dict(gridcolor="#dce8f5", zeroline=True, zerolinecolor="#c8d8f0"),
-            yaxis=dict(gridcolor="#dce8f5"),
-            showlegend=False,
-        )
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-    # ── Row 4: Asset Defence Gauges + 14-Day Forecast ────────
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    col_gauge, col_fc = st.columns([1, 2])
+    # ── TECHNICAL DASHBOARD SECTION (ONLY VISIBLE TO ENGINEER) ──
+    if persona_mode == "🛠️ Chief Engineer":
+        # ── Top Metrics Row ───────────────────────────────────────
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            st.markdown(f"""
+            <div class="metric-box" style="border-top:3px solid #7a4fc0;">
+              <div class="metric-lbl">Optimised Load</div>
+              <div class="metric-val">{load_kw:.3f} <span style="font-size:0.9rem;">kW</span></div>
+            </div>""", unsafe_allow_html=True)
+        with c2:
+            st.markdown(f"""
+            <div class="metric-box" style="border-top:3px solid #1e80cc;">
+              <div class="metric-lbl">HVAC Mode</div>
+              <div class="metric-val" style="font-size:0.92rem; padding-top:6px; color:#1e80cc;">
+                {mode.replace("_", " ")}
+              </div>
+            </div>""", unsafe_allow_html=True)
+        with c3:
+            roi_display = f"₹{roi_inr:,.0f}" if roi_inr is not None else "—"
+            st.markdown(f"""
+            <div class="metric-box" style="border-top:3px solid #20a868;">
+              <div class="metric-lbl">Annual ROI</div>
+              <div class="metric-val" style="color:#20a868;">{roi_display}</div>
+            </div>""", unsafe_allow_html=True)
+        with c4:
+            co2_display = f"{co2_kg} kg" if co2_kg is not None else "—"
+            st.markdown(f"""
+            <div class="metric-box" style="border-top:3px solid #18b098;">
+              <div class="metric-lbl">CO₂ Saved / hr</div>
+              <div class="metric-val" style="color:#18b098;">{co2_display}</div>
+            </div>""", unsafe_allow_html=True)
 
-    with col_gauge:
-        st.markdown('<div class="section-label">// ASSET DEFENCE GAUGES</div>',
-                    unsafe_allow_html=True)
+        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
-        # Dew point gauge
-        if dew_pt is not None:
-            fig_dew = go.Figure(go.Indicator(
-                mode="gauge+number+delta", value=internal_temp,
-                delta={"reference": dew_pt,
-                       "increasing": {"color": "#20a868"},
-                       "decreasing": {"color": "#c83048"}},
-                title={"text": "Temp vs Dew Point (°C)",
-                       "font": {"family": "Nunito", "size": 10, "color": "#5878a8"}},
-                number={"font": {"family": "DM Mono", "size": 24, "color": "#7a4fc0"}, "suffix": "°C"},
-                gauge={
-                    "axis": {"range": [dew_pt - 5, internal_temp + 10], "tickcolor": "#5878a8"},
-                    "bar": {"color": "#9880d8"},
-                    "bgcolor": "#f2f6fc", "bordercolor": "#c8d8f0",
-                    "steps": [
-                        {"range": [dew_pt - 5, dew_pt + 1], "color": "rgba(200,48,72,0.18)"},
-                        {"range": [dew_pt + 1, dew_pt + 3], "color": "rgba(208,128,0,0.15)"},
-                        {"range": [dew_pt + 3, internal_temp + 10], "color": "rgba(32,168,104,0.12)"},
-                    ],
-                    "threshold": {"line": {"color": "#c83048", "width": 2},
-                                  "thickness": 0.8, "value": dew_pt + 1},
-                },
+        # ── Row 2: Load + Savings + Ship Status ──────────────────
+        col_load, col_sav, col_status = st.columns([2, 1, 1])
+
+        with col_load:
+            num_class = "load-number heating" if is_heat else "load-number"
+            box_class = "load-box heating-mode" if is_heat else "load-box"
+            st.markdown(f"""
+            <div class="{box_class}">
+              <div class="section-label">// OPTIMISED HVAC LOAD</div>
+              <div class="{num_class}">{load_kw:.3f}</div>
+              <div class="load-unit">kilowatts</div>
+              <div><span class="mode-badge mode-{mode}">{mode.replace("_", " ")}</span></div>
+              <div style="margin-top:10px; font-family:'DM Mono',monospace; font-size:0.62rem;
+                          color:#5878a8; letter-spacing:0.07em;">
+                SETPOINT: {setpoint:.1f}°C &nbsp;·&nbsp; {cabin_id} &nbsp;·&nbsp;
+                SRC: {wx_src.upper()} &nbsp;·&nbsp; SEG: {market.upper()} &nbsp;·&nbsp; {ship_length}m
+              </div>
+            </div>""", unsafe_allow_html=True)
+
+        with col_sav:
+            # Ghost Cooling triggers on MAINTENANCE_COOLING (mock/fixed engine) OR STANDBY (live engine)
+            ghost_active = mode in ("MAINTENANCE_COOLING", "STANDBY")
+            sav_border   = "#d08000" if ghost_active else ("#2a68e0" if is_heat else "#20a868")
+            sav_color    = "#d08000" if ghost_active else ("#2a68e0" if is_heat else "#20a868")
+            sav_bg       = "#fff9ed" if ghost_active else ("#eef2ff" if is_heat else "#edfdf5")
+            sav_icon     = "⚙️" if ghost_active else ("🌨️" if is_heat else "⚡")
+            sav_label    = "GHOST PROTOCOL" if ghost_active else ("HEATING MODE" if is_heat else "ENERGY SAVED")
+
+            st.markdown(f"""
+            <div class="savings-box" style="border-top-color:{sav_border};
+                 background:linear-gradient(145deg,#fff,{sav_bg});">
+              <div class="section-label">// {sav_label}</div>
+              <div class="savings-number" style="color:{sav_color};">{sav_icon} {savings:.1f}%</div>
+              <div style="font-family:'DM Mono',monospace; font-size:0.64rem;
+                          color:#5878a8; margin-top:5px;">vs full-load baseline</div>
+            </div>""", unsafe_allow_html=True)
+
+            st.markdown("<div style='height:7px'></div>", unsafe_allow_html=True)
+
+            # Mode-specific sub-panel
+            if mode in ("MAINTENANCE_COOLING", "STANDBY"):
+                st.markdown(f"""
+                <div style="background:#fffbf0; border:1.5px solid #f0d060;
+                            border-left:4px solid #d08000; border-radius:9px; padding:10px;">
+                  <div style="font-family:'Nunito',sans-serif; font-size:0.70rem;
+                              font-weight:800; color:#906000;">⚙️ GHOST COOLING ACTIVE</div>
+                  <div style="font-family:'DM Mono',monospace; font-size:0.68rem;
+                              color:#385070; margin-top:4px;">
+                    Empty cabin · {100-savings:.0f}% load · {setpoint:.1f}°C setpoint
+                  </div>
+                </div>""", unsafe_allow_html=True)
+            elif mode == "CORROSION_PREVENTION":
+                st.markdown("""
+                <div style="background:#fff0f2; border:1.5px solid #f0a0b0;
+                            border-left:4px solid #c83048; border-radius:9px; padding:10px;">
+                  <div style="font-family:'Nunito',sans-serif; font-size:0.70rem;
+                              font-weight:800; color:#c83048;">🚨 CORROSION PREVENTION</div>
+                  <div style="font-family:'DM Mono',monospace; font-size:0.68rem;
+                              color:#385070; margin-top:4px;">Fans 30% · Hull condensation risk</div>
+                </div>""", unsafe_allow_html=True)
+            elif mode == "MOLD_ALERT":
+                st.markdown("""
+                <div style="background:#fffbf0; border:1.5px solid #f0d060;
+                            border-left:4px solid #d08000; border-radius:9px; padding:10px;">
+                  <div style="font-family:'Nunito',sans-serif; font-size:0.70rem;
+                              font-weight:800; color:#906000;">⚠ MOLD ALERT</div>
+                  <div style="font-family:'DM Mono',monospace; font-size:0.68rem;
+                              color:#385070; margin-top:4px;">Dehumidification · Ventilation ↑</div>
+                </div>""", unsafe_allow_html=True)
+            else:
+                occ_color  = "#20a868" if occupancy else "#d08000"
+                occ_bg     = "#edfdf5" if occupancy else "#fffbf0"
+                occ_border = "#80d0a8" if occupancy else "#f0d060"
+                occ_label  = "OCCUPIED — FULL COMFORT" if occupancy else "EMPTY — MONITORING"
+                st.markdown(f"""
+                <div style="background:{occ_bg}; border:1.5px solid {occ_border};
+                            border-left:4px solid {occ_color}; border-radius:9px; padding:10px;">
+                  <div style="font-family:'Nunito',sans-serif; font-size:0.70rem;
+                              font-weight:800; color:{occ_color};">
+                    {'✓' if occupancy else '○'} {occ_label}
+                  </div>
+                  <div style="font-family:'DM Mono',monospace; font-size:0.68rem;
+                              color:#385070; margin-top:4px;">
+                    {occ_count} occupants · {setpoint:.1f}°C
+                  </div>
+                </div>""", unsafe_allow_html=True)
+
+        with col_status:
+            st.markdown('<div class="section-label">// SHIP DYNAMICS</div>', unsafe_allow_html=True)
+            for label, active, on_txt, off_txt, act_color, act_bg in [
+                ("☀️ Direct Sun",  direct_sunlight,  "ACTIVE",   "NONE",   "#c83048", "#fff0f2"),
+                ("🔥 Hull Soaked", heat_soaked_hull, "ACTIVE",   "NORMAL", "#c83048", "#fff0f2"),
+                ("⚙️ Engine Adj",  engine_adjacent,  "ACTIVE",   "CLEAR",  "#f07050", "#fff8f5"),
+                ("🧍 Occupancy",   occupancy,         "OCCUPIED", "EMPTY",  "#20a868", "#edfdf5"),
+            ]:
+                txt   = on_txt if active else off_txt
+                color = act_color if active else "#5878a8"
+                bg    = act_bg   if active else "#f2f6fc"
+                st.markdown(f"""
+                <div class="status-row" style="background:{bg};">
+                  <span class="label-muted">{label}</span>
+                  <span style="color:{color}; font-weight:700; font-size:0.72rem;">{txt}</span>
+                </div>""", unsafe_allow_html=True)
+
+            st.markdown("<div style='height:5px'></div>", unsafe_allow_html=True)
+
+            if dew_pt is not None:
+                margin   = internal_temp - dew_pt
+                dp_color = "#c83048" if margin < 1.0 else ("#d08000" if margin < 3.0 else "#20a868")
+                st.markdown(f"""
+                <div class="status-row">
+                  <span class="label-muted">💧 Dew Pt</span>
+                  <span style="color:{dp_color}; font-weight:700;">{dew_pt:.1f}°C</span>
+                </div>
+                <div class="status-row">
+                  <span class="label-muted">📏 Margin</span>
+                  <span style="color:{dp_color}; font-weight:700;">{margin:.1f}°C</span>
+                </div>""", unsafe_allow_html=True)
+
+            ext_disp = f"{external_temp:.1f}°C" if manual_weather and external_temp else "AUTO"
+            for lbl, val in [
+                ("🌡️ Ext",   ext_disp),
+                ("💧 RH",    f"{internal_rh:.0f}%"),
+                ("🏢 Seg",   market.upper()),
+                ("🚢 Ship",  f"{ship_length}m"),
+                ("🪟 Win",   f"{window_area:.1f}m²"),
+                ("🔌 Equip", f"{equip_watts}W"),
+            ]:
+                st.markdown(f"""
+                <div class="status-row">
+                  <span class="label-muted">{lbl}</span>
+                  <span style="color:#1e80cc; font-weight:700;">{val}</span>
+                </div>""", unsafe_allow_html=True)
+
+        st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+
+        # ── Row 3: AI Decision Log + 11-Bar Heat Breakdown ────────
+        col_log, col_chart = st.columns([3, 2])
+
+        with col_log:
+            st.markdown('<div class="section-label">// AI DECISION LOG — REASONING TRACE</div>',
+                        unsafe_allow_html=True)
+            log_lines = result.get("decision_log", ["No log available."])
+            log_html  = colorise_log(log_lines)
+            ts        = time.strftime("%H:%M:%S")
+            st.markdown(f"""
+            <div class="decision-log">
+    <span class="log-header">MAR-HVAC ENGINE — {ts} — {cabin_id}</span>
+
+    {log_html}
+            </div>""", unsafe_allow_html=True)
+
+            # ── MAR-Chat ─────────────────────────────────────────
+            st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+            st.markdown('<div class="section-label">// MAR-CHAT — ASK THE AI</div>',
+                        unsafe_allow_html=True)
+            chat_col1, chat_col2 = st.columns([5, 1])
+            with chat_col1:
+                chat_q = st.text_input(
+                    "Ask a question about this HVAC decision",
+                    placeholder="e.g. Why is this mode active? How much am I saving?",
+                    label_visibility="collapsed",
+                )
+            with chat_col2:
+                chat_btn = st.button("Ask →", use_container_width=True)
+
+            if chat_btn and chat_q.strip():
+                st.session_state["chat_response"] = ask_mar_chat_local(chat_q, result)
+
+            if st.session_state["chat_response"]:
+                st.markdown(f"""
+                <div class="mar-chat-box">🤖 {st.session_state["chat_response"]}</div>
+                """, unsafe_allow_html=True)
+
+        with col_chart:
+            st.markdown('<div class="section-label">// HEAT LOAD BREAKDOWN — 11 VARIABLES (kW)</div>',
+                        unsafe_allow_html=True)
+            bd = result.get("breakdown", {})
+            labels = [
+                "Wall Transmission", "Solar (Porthole)",    "Fenestration (Windows)",
+                "Metabolic (People)", "Equipment",           "Engine Radiant",
+                "Thermal Lag",        "Ceiling (Solar-Air)", "Floor Conduction",
+                "Latent (Salt Air)",  "Heating Load",
+            ]
+            values = [
+                bd.get("q_transmission", 0),  bd.get("q_solar", 0),        bd.get("q_fenestration", 0),
+                bd.get("q_metabolic", 0),     bd.get("q_equipment", 0),    bd.get("q_engine_radiant", 0),
+                bd.get("q_thermal_lag", 0),   bd.get("q_ceiling", 0),      bd.get("q_floor_conduction", 0),
+                bd.get("q_latent", 0),        bd.get("heating_load_kw", 0),
+            ]
+            bar_colors = [
+                "#6ab8e8", "#f8c820", "#7a4fc0", "#6ed8b0", "#9880d8",
+                "#f07050", "#f8a888", "#f8c820", "#6ed8b0", "#9880d8", "#6ab8e8",
+            ]
+            fig = go.Figure(go.Bar(
+                x=values, y=labels, orientation="h",
+                marker=dict(color=bar_colors, line=dict(color="#c8d8f0", width=1)),
+                text=[f"{v:.3f}" for v in values],
+                textposition="outside",
+                textfont=dict(family="DM Mono", size=8, color="#385070"),
             ))
-            fig_dew.update_layout(
-                paper_bgcolor="#ffffff", font_color="#5878a8",
-                margin=dict(l=16, r=16, t=36, b=8), height=188,
+            fig.add_vline(
+                x=load_kw, line_dash="dash", line_color="#7a4fc0", line_width=1.5,
+                annotation_text=f"Opt: {load_kw:.3f}kW",
+                annotation_font=dict(color="#7a4fc0", size=8, family="DM Mono"),
+                annotation_position="top right",
             )
-            st.plotly_chart(fig_dew, use_container_width=True, config={"displayModeBar": False})
-
-        # Humidity / mold gauge
-        mold_thresh = {"cargo": 70, "cruise": 65, "navy": 60, "hospital": 55, "yacht": 60}.get(market, 70)
-        fig_rh = go.Figure(go.Indicator(
-            mode="gauge+number", value=internal_rh,
-            title={"text": f"Humidity % (mold >{mold_thresh}%)",
-                   "font": {"family": "Nunito", "size": 10, "color": "#5878a8"}},
-            number={"font": {"family": "DM Mono", "size": 24, "color": "#18b098"}, "suffix": "%"},
-            gauge={
-                "axis": {"range": [0, 100]},
-                "bar": {"color": "#6ed8b0"},
-                "bgcolor": "#f2f6fc", "bordercolor": "#c8d8f0",
-                "steps": [
-                    {"range": [0, mold_thresh], "color": "rgba(32,168,104,0.12)"},
-                    {"range": [mold_thresh, 100], "color": "rgba(208,128,0,0.15)"},
-                ],
-                "threshold": {"line": {"color": "#d08000", "width": 2},
-                              "thickness": 0.8, "value": mold_thresh},
-            },
-        ))
-        fig_rh.update_layout(
-            paper_bgcolor="#ffffff", font_color="#5878a8",
-            margin=dict(l=16, r=16, t=36, b=8), height=168,
-        )
-        st.plotly_chart(fig_rh, use_container_width=True, config={"displayModeBar": False})
-
-    with col_fc:
-        st.markdown('<div class="section-label">// 14-DAY ANTICIPATORY COOLING FORECAST</div>',
-                    unsafe_allow_html=True)
-        if st.button("📡 Load Forecast Chart", use_container_width=False):
-            st.session_state["forecast_points"] = api_forecast()
-
-        pts = st.session_state.get("forecast_points", [])
-        if pts:
-            df = pd.DataFrame(pts)
-            df["Time"] = pd.to_datetime(df["ts"], unit="s")
-            fig_fc = go.Figure()
-            fig_fc.add_trace(go.Scatter(
-                x=df["Time"], y=df["temp"], mode="lines+markers", name="Temp °C",
-                line=dict(color="#1e80cc", width=2.5),
-                marker=dict(color="#7a4fc0", size=4),
-                fill="tozeroy", fillcolor="rgba(122,79,192,0.08)",
-            ))
-            if "humidity" in df.columns:
-                fig_fc.add_trace(go.Scatter(
-                    x=df["Time"], y=df["humidity"], mode="lines", name="Humidity %",
-                    line=dict(color="#9880d8", width=2, dash="dot"), yaxis="y2",
-                ))
-            fig_fc.add_hline(
-                y=target_temp, line_dash="dot", line_color="#20a868",
-                annotation_text=f"Setpoint {target_temp:.1f}°C",
-                annotation_font=dict(color="#20a868", size=8, family="DM Mono"),
-            )
-            fig_fc.update_layout(
+            fig.update_layout(
                 paper_bgcolor="#ffffff", plot_bgcolor="#f2f6fc",
                 font=dict(family="DM Mono", size=8, color="#5878a8"),
-                margin=dict(l=10, r=55, t=8, b=28), height=320,
-                xaxis=dict(gridcolor="#dce8f5", tickangle=-40),
-                yaxis=dict(title="Temp (°C)", gridcolor="#dce8f5"),
-                yaxis2=dict(title="Humidity (%)", overlaying="y", side="right", showgrid=False),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
-                            font=dict(family="DM Mono", size=8)),
+                margin=dict(l=10, r=65, t=8, b=16), height=340,
+                xaxis=dict(gridcolor="#dce8f5", zeroline=True, zerolinecolor="#c8d8f0"),
+                yaxis=dict(gridcolor="#dce8f5"),
+                showlegend=False,
             )
-            st.plotly_chart(fig_fc, use_container_width=True, config={"displayModeBar": False})
-        else:
-            st.markdown("""
-            <div style="background:#f2f6fc; border:1.5px solid #c8d8f0; border-radius:10px;
-                        padding:36px; text-align:center; color:#5878a8;
-                        font-family:'DM Mono',monospace; font-size:0.76rem; line-height:1.8;">
-              Press '📡 Load Forecast Chart' to display the 14-day route forecast.<br><br>
-              First fetch the buffer via the 🔄 FORECAST button in the sidebar.
-            </div>""", unsafe_allow_html=True)
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+        # ── Row 4: Asset Defence Gauges + 14-Day Forecast ────────
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        col_gauge, col_fc = st.columns([1, 2])
+
+        with col_gauge:
+            st.markdown('<div class="section-label">// ASSET DEFENCE GAUGES</div>',
+                        unsafe_allow_html=True)
+
+            # Dew point gauge
+            if dew_pt is not None:
+                fig_dew = go.Figure(go.Indicator(
+                    mode="gauge+number+delta", value=internal_temp,
+                    delta={"reference": dew_pt,
+                           "increasing": {"color": "#20a868"},
+                           "decreasing": {"color": "#c83048"}},
+                    title={"text": "Temp vs Dew Point (°C)",
+                           "font": {"family": "Nunito", "size": 10, "color": "#5878a8"}},
+                    number={"font": {"family": "DM Mono", "size": 24, "color": "#7a4fc0"}, "suffix": "°C"},
+                    gauge={
+                        "axis": {"range": [dew_pt - 5, internal_temp + 10], "tickcolor": "#5878a8"},
+                        "bar": {"color": "#9880d8"},
+                        "bgcolor": "#f2f6fc", "bordercolor": "#c8d8f0",
+                        "steps": [
+                            {"range": [dew_pt - 5, dew_pt + 1], "color": "rgba(200,48,72,0.18)"},
+                            {"range": [dew_pt + 1, dew_pt + 3], "color": "rgba(208,128,0,0.15)"},
+                            {"range": [dew_pt + 3, internal_temp + 10], "color": "rgba(32,168,104,0.12)"},
+                        ],
+                        "threshold": {"line": {"color": "#c83048", "width": 2},
+                                      "thickness": 0.8, "value": dew_pt + 1},
+                    },
+                ))
+                fig_dew.update_layout(
+                    paper_bgcolor="#ffffff", font_color="#5878a8",
+                    margin=dict(l=16, r=16, t=36, b=8), height=188,
+                )
+                st.plotly_chart(fig_dew, use_container_width=True, config={"displayModeBar": False})
+
+            # Humidity / mold gauge
+            mold_thresh = {"cargo": 70, "cruise": 65, "navy": 60, "hospital": 55, "yacht": 60}.get(market, 70)
+            fig_rh = go.Figure(go.Indicator(
+                mode="gauge+number", value=internal_rh,
+                title={"text": f"Humidity % (mold >{mold_thresh}%)",
+                       "font": {"family": "Nunito", "size": 10, "color": "#5878a8"}},
+                number={"font": {"family": "DM Mono", "size": 24, "color": "#18b098"}, "suffix": "%"},
+                gauge={
+                    "axis": {"range": [0, 100]},
+                    "bar": {"color": "#6ed8b0"},
+                    "bgcolor": "#f2f6fc", "bordercolor": "#c8d8f0",
+                    "steps": [
+                        {"range": [0, mold_thresh], "color": "rgba(32,168,104,0.12)"},
+                        {"range": [mold_thresh, 100], "color": "rgba(208,128,0,0.15)"},
+                    ],
+                    "threshold": {"line": {"color": "#d08000", "width": 2},
+                                  "thickness": 0.8, "value": mold_thresh},
+                },
+            ))
+            fig_rh.update_layout(
+                paper_bgcolor="#ffffff", font_color="#5878a8",
+                margin=dict(l=16, r=16, t=36, b=8), height=168,
+            )
+            st.plotly_chart(fig_rh, use_container_width=True, config={"displayModeBar": False})
+
+        with col_fc:
+            st.markdown('<div class="section-label">// 14-DAY ANTICIPATORY COOLING FORECAST</div>',
+                        unsafe_allow_html=True)
+            if st.button("📡 Load Forecast Chart", use_container_width=False):
+                st.session_state["forecast_points"] = api_forecast()
+
+            pts = st.session_state.get("forecast_points", [])
+            if pts:
+                df = pd.DataFrame(pts)
+                df["Time"] = pd.to_datetime(df["ts"], unit="s")
+                fig_fc = go.Figure()
+                fig_fc.add_trace(go.Scatter(
+                    x=df["Time"], y=df["temp"], mode="lines+markers", name="Temp °C",
+                    line=dict(color="#1e80cc", width=2.5),
+                    marker=dict(color="#7a4fc0", size=4),
+                    fill="tozeroy", fillcolor="rgba(122,79,192,0.08)",
+                ))
+                if "humidity" in df.columns:
+                    fig_fc.add_trace(go.Scatter(
+                        x=df["Time"], y=df["humidity"], mode="lines", name="Humidity %",
+                        line=dict(color="#9880d8", width=2, dash="dot"), yaxis="y2",
+                    ))
+                fig_fc.add_hline(
+                    y=target_temp, line_dash="dot", line_color="#20a868",
+                    annotation_text=f"Setpoint {target_temp:.1f}°C",
+                    annotation_font=dict(color="#20a868", size=8, family="DM Mono"),
+                )
+                fig_fc.update_layout(
+                    paper_bgcolor="#ffffff", plot_bgcolor="#f2f6fc",
+                    font=dict(family="DM Mono", size=8, color="#5878a8"),
+                    margin=dict(l=10, r=55, t=8, b=28), height=320,
+                    xaxis=dict(gridcolor="#dce8f5", tickangle=-40),
+                    yaxis=dict(title="Temp (°C)", gridcolor="#dce8f5"),
+                    yaxis2=dict(title="Humidity (%)", overlaying="y", side="right", showgrid=False),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                                font=dict(family="DM Mono", size=8)),
+                )
+                st.plotly_chart(fig_fc, use_container_width=True, config={"displayModeBar": False})
+            else:
+                st.markdown("""
+                <div style="background:#f2f6fc; border:1.5px solid #c8d8f0; border-radius:10px;
+                            padding:36px; text-align:center; color:#5878a8;
+                            font-family:'DM Mono',monospace; font-size:0.76rem; line-height:1.8;">
+                  Press '📡 Load Forecast Chart' to display the 14-day route forecast.<br><br>
+                  First fetch the buffer via the 🔄 FORECAST button in the sidebar.
+                </div>""", unsafe_allow_html=True)
 
 else:
     # ── Idle / ready state ────────────────────────────────────
