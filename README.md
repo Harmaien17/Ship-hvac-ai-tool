@@ -52,7 +52,3 @@ Open a terminal in the root directory, activate your virtual environment, and bo
 ```bash
 cd frontend
 streamlit run app.py
-
-Open a terminal in the root directory, activate your virtual environment, and start the FastAPI server:
-```bash
-python -m uvicorn backend.main:app --reload
