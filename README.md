@@ -6,7 +6,7 @@
 ## 🌊 Executive Summary
 MAR-HVAC AI is a decentralized, Edge-AI cooling optimization system engineered specifically for deep-sea commercial vessels. By computing an 11-variable thermodynamic matrix in real-time, the system autonomously minimizes compressor load, significantly reduces marine diesel CO₂ emissions, and delivers an estimated **₹12,00,000 to ₹18,00,000 in annual operational savings** per vessel. 
 
-Designed with deep-sea resilience at its core, the architecture operates fully autonomously on low-RAM edge nodes, ensuring uninterrupted optimization even during prolonged Starlink or satellite connectivity blackouts.
+Designed with deep-sea resilience at its core, the architecture operates fully autonomously on low-RAM edge nodes. Moving beyond simple fuel savings, the system acts as a dedicated **ESG Monetization Engine**, actively generating carbon credits and ensuring compliance with strict global maritime emission regulations (IMO 2030) even during prolonged Starlink or satellite connectivity blackouts.
 
 ---
 
@@ -20,9 +20,14 @@ Designed with deep-sea resilience at its core, the architecture operates fully a
 * **Waste Heat Offset Analysis:** Features an integrated endpoint to calculate potential HVAC compressor offsets by recovering energy from engine exhaust waste heat.
 
 ### 🖥️ The Command Center (Frontend Edge Dashboard)
-* **Local AutoCAD Parsing:** An edge-computed PDF parser that autonomously extracts cabin geometry (m²) directly from ship blueprints, eliminating the need to transmit heavy files over limited satellite bandwidth.
-* **Anticipatory Cooling Analytics:** Interactive Plotly visualizations map 14-day temperature and humidity forecasts, allowing the system to preemptively condition cabin environments ahead of severe weather fronts.
-* **Autonomous Decision Logging:** Provides a real-time, human-readable audit trail of the AI's thermodynamic adjustments (e.g., *“Occupancy Sensor: Empty. Triggering STANDBY mode.”*).
+* **💼 Dual-Persona UI Architecture:** Dynamically adapts the dashboard interface based on the stakeholder:
+  * **Chief Engineer View:** Displays raw thermodynamic telemetry, live asset defense gauges (dew point/mold risk), and autonomous decision logs.
+  * **Fleet CFO View:** Abstracts the physics to deliver a high-level executive summary focusing purely on total financial impact, ROI calculation matrices, and carbon market valuations.
+* **🌿 ESG & Carbon Credit Monetization:** Translates mitigated CO₂ emissions into verified Carbon Credits. Automatically calculates the open-market trading value (e.g., ₹4,000 / $50 USD per tonne) of saved energy, transforming the HVAC system from a cost-saver into a revenue-generator.
+* **⚖️ IMO 2030 Regulatory Compliance:** Directly tracks metrics to improve the vessel's **Carbon Intensity Indicator (CII)** rating, preventing heavy regulatory fines and protecting fleets from forced slow-steaming penalties.
+* **📐 Edge AutoCAD Parsing:** An edge-computed PDF/DWG parser that autonomously extracts cabin geometry (m²) directly from ship blueprints, eliminating the need to transmit heavy CAD files over limited Starlink bandwidth.
+* **📡 Anticipatory Cooling & Live Telemetry:** Interactive Plotly visualizations map 14-day temperature and humidity forecasts, while a live dashboard badge monitors real-time Starlink/Edge connectivity status.
+* **⚙️ Autonomous Decision Logging:** Provides a real-time, human-readable audit trail of the AI's thermodynamic adjustments (e.g., *“Occupancy Sensor: Empty. Triggering STANDBY mode.”*).
 
 ---
 
@@ -30,7 +35,7 @@ Designed with deep-sea resilience at its core, the architecture operates fully a
 * **Backend Engine:** Python 3.12, FastAPI, Pydantic, Uvicorn
 * **Frontend Dashboard:** Streamlit, Plotly, Pandas, PyPDF
 * **External Integrations:** OpenWeather API (simulating live Starlink telemetry)
-* **Architecture:** Distributed Edge-Compute (Optimized for shipboard IoT deployment)
+* **Architecture:** Distributed Edge-Compute (Optimized for low-RAM shipboard IoT deployment)
 
 ---
 
@@ -40,3 +45,10 @@ Designed with deep-sea resilience at its core, the architecture operates fully a
 Open a terminal in the root directory, activate your virtual environment, and start the FastAPI server:
 ```bash
 python -m uvicorn backend.main:app --reload
+
+
+### 2. Launch the Command Center (Frontend)
+Open a second terminal, ensure the virtual environment is active, and boot the Streamlit dashboard:
+```bash
+cd frontend
+streamlit run app.py
