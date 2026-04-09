@@ -29,7 +29,7 @@ def calculate_optimized_load(telemetry: CabinTelemetry, blueprint_total: Optiona
     
     # 1. Environmental Fallbacks
     ext_temp = telemetry.external_temp if telemetry.external_temp is not None else 32.0
-    delta_t = max(0, ext_temp - telemetry.internal_temp)
+    delta_t = max(0, ext_temp - telemetry.target_temp)
     
     # ─────────────────────────────────────────────────────────────
     # THE 11-VARIABLE THERMODYNAMIC MATH (FORMULA SHEET INTEGRATION)
