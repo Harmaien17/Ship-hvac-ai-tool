@@ -1,5 +1,5 @@
 """
-MAR-HVAC AI — Command Center Dashboard
+NauticEdge — Command Center Dashboard
 frontend/app.py
 
 MERGED FINAL VERSION — All Features Unified
@@ -55,7 +55,7 @@ API_TIMEOUT = 10
 DEMO_MODE = False
 
 st.set_page_config(
-    page_title="MAR-HVAC AI",
+    page_title="NauticEdge",
     page_icon="🚢",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -822,7 +822,7 @@ def mock_fallback(payload: dict) -> dict:
         "dew_point": dew_pt,
         "warnings": warnings,
         "decision_log": [
-            f"=== MAR-HVAC LOCAL ENGINE — {cabin_id} ===",
+            f"=== NauticEdge LOCAL ENGINE — {cabin_id} ===",
             f"--- Ext: {ext_temp}°C  Int: {int_temp}°C  RH: {rh}%  Area: {area}m² ---",
             f"--- ΔT={delta_t:.1f}°C  Solar={solar}W/m²  Occ={occ_count} ---",
             f"q_transmission={q_transmission}kW  q_solar={q_solar}kW  q_latent={q_latent}kW",
@@ -936,7 +936,7 @@ st.markdown(f"""
             box-shadow:0 4px 20px rgba(122,79,192,0.12);">
   <div>
     <div style="font-family:'Nunito',sans-serif; font-size:1.25rem; font-weight:900;
-                color:#5a3898; letter-spacing:0.02em;">🚢 MAR-HVAC AI — COMMAND CENTER</div>
+                color:#5a3898; letter-spacing:0.02em;">🚢 NauticEdge — COMMAND CENTER</div>
     <div style="font-family:'DM Mono',monospace; font-size:0.58rem; color:#5878a8;
                 letter-spacing:0.16em; margin-top:2px;">
       INTELLIGENT HEAT LOAD OPTIMISATION &nbsp;|&nbsp; NODE: {BACKEND_URL}
@@ -964,7 +964,7 @@ with st.sidebar:
     <div style="text-align:center; padding:10px 0 14px; border-bottom:1.5px solid #c8d8f0; margin-bottom:14px;">
       <div style="font-size:1.8rem; margin-bottom:3px;">🚢</div>
       <div style="font-family:'Nunito',sans-serif; font-size:1.05rem; font-weight:900;
-                  color:#7a4fc0; letter-spacing:0.05em;">MAR-HVAC AI</div>
+                  color:#7a4fc0; letter-spacing:0.05em;">NauticEdge</div>
       <div style="font-family:'DM Mono',monospace; font-size:0.52rem; color:#5878a8;
                   letter-spacing:0.22em; margin-top:2px;">COMMAND CENTER v2.0</div>
     </div>""", unsafe_allow_html=True)
@@ -997,7 +997,7 @@ with st.sidebar:
 
         # >>>>>> REAL BACKEND API INTEGRATION FOR .DWG FILES <<<<<<
         if fname.endswith(".dwg") or fname.endswith(".pdf"):
-            st.info(f"📐 {fname} detected - communicating with MAR-HVAC AI backend...")
+            st.info(f"📐 {fname} detected - communicating with NauticEdge backend...")
             
             with st.spinner("Extracting structural variables & running Asset Defence..."):
                 try:
@@ -1511,7 +1511,7 @@ if result and "mode" in result:
             ts        = time.strftime("%H:%M:%S")
             st.markdown(f"""
             <div class="decision-log">
-    <span class="log-header">MAR-HVAC ENGINE — {ts} — {cabin_id}</span>
+    <span class="log-header">NauticEdge ENGINE — {ts} — {cabin_id}</span>
 
     {log_html}
             </div>""", unsafe_allow_html=True)
@@ -1698,7 +1698,7 @@ else:
                 box-shadow:0 4px 20px rgba(122,79,192,0.10);">
       <div style="font-size:3.5rem; margin-bottom:14px;">🚢</div>
       <div style="font-family:'Nunito',sans-serif; font-weight:900; font-size:1.2rem;
-                  color:#7a4fc0; letter-spacing:0.04em;">MAR-HVAC AI READY</div>
+                  color:#7a4fc0; letter-spacing:0.04em;">NauticEdge READY</div>
       <div style="margin-top:8px; font-family:'DM Mono',monospace; font-size:0.75rem;
                   color:#5878a8; line-height:1.8;">
         Configure cabin parameters in the sidebar and press ⚡ CALCULATE
@@ -1714,7 +1714,7 @@ st.markdown("""
 <div style="margin-top:20px; text-align:center; font-family:'DM Mono',monospace;
             font-size:0.55rem; color:#9880d8;
             border-top:1.5px solid #c8d8f0; padding-top:10px;">
-  MAR-HVAC AI v2.0 &nbsp;·&nbsp; Merged Final &nbsp;·&nbsp; ASHRAE + IMO 2030
+  NauticEdge v2.0 &nbsp;·&nbsp; Merged Final &nbsp;·&nbsp; ASHRAE + IMO 2030
   &nbsp;·&nbsp; AutoCAD Parser · MAR-Chat · ROI Banner · Asset Defence · 14-Day Forecast
   &nbsp;·&nbsp; Government Polytechnic Pune — Idea Forge 2026
 </div>
