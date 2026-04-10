@@ -7,6 +7,7 @@ UI THEME: Soft Maritime Daylight — pastel, white, purple, lively
 
 Features merged from both versions:
   - Full AutoCAD PDF blueprint parser (v2 extended regex suite)
+  - DWG AI Backend Integration
   - MAR-Chat AI explainer panel (rule-based, works offline)
   - ROI banner with CO₂ stats
   - 11-variable heat load breakdown bar chart
@@ -993,30 +994,61 @@ with st.sidebar:
 
     if drawing:
         fname = drawing.name.lower()
-        if fname.endswith(".dwg"):
-            st.info("📐 DWG file detected — communicating with backend…")
-            try:
-                files = {"drawing": (drawing.name, drawing.read(), "application/octet-stream")}
-                r = requests.post(f"{BACKEND_URL}/api/v1/analyze/blueprint", files=files, timeout=10)
-                if r.status_code == 200:
-                    bp = r.json().get("blueprint_variables", {})
-                    # Wrap single DWG response in a list for the dropdown
-                    st.session_state.parsed_cabins = [{
-                        "cabin_id": r.json().get("cabin_id", "DWG-MAIN"),
-                        "cabin_area_m2": bp.get("cabin_area_m2", 35.0),
-                        "window_area_m2": bp.get("window_area_m2", 2.5)
-                    }]
-                    st.success("✅ DWG successfully parsed!")
-                else:
-                    st.warning("Backend DWG parser offline. Enter manually.")
-            except Exception:
-                st.warning("Backend DWG parser unreachable. Enter manually.")
 
-        elif fname.endswith(".pdf"):
-            with st.spinner("Parsing blueprint nodes…"):
-                st.session_state.parsed_cabins = parse_ship_drawing_locally(drawing.read())
-                if st.session_state.parsed_cabins:
-                    st.success(f"✅ Extracted {len(st.session_state.parsed_cabins)} distinct cabins!")
+        # >>>>>> REAL BACKEND API INTEGRATION FOR .DWG FILES <<<<<<
+        if fname.endswith(".dwg") or fname.endswith(".pdf"):
+            st.info(f"📐 {fname} detected - communicating with MAR-HVAC AI backend...")
+            
+            with st.spinner("Extracting structural variables & running Asset Defence..."):
+                try:
+                    # Prepare the file for FastAPI
+                    files = {"drawing": (drawing.name, drawing.getvalue(), drawing.type)}
+                    
+                    # Ensure basic fallback data is passed to prevent 422 errors
+                    data = {
+                        "cabin_id": "DEMO-CABIN-1", 
+                        "internal_temp": 26.0,
+                        "internal_rh": 60.0,
+                        "market_segment": "cargo"
+                    }
+                    
+                    # Make the POST request to your local FastAPI server
+                    response = requests.post(
+                        f"{BACKEND_URL}/api/v1/analyze/blueprint", 
+                        files=files, 
+                        data=data,
+                        timeout=15
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        st.success("✅ Drawing successfully parsed and verified by AI!")
+                        
+                        # Populate dropdown with the extracted baseline data
+                        st.session_state.parsed_cabins = [
+                            {
+                                "cabin_id": result.get("cabin_id", f"CABIN-{fname[:4]}"),
+                                "total_raw_load": result.get("blueprint_variables", {}).get("total_raw_load", 0),
+                                "cabin_area_m2": result.get("blueprint_variables", {}).get("cabin_area_m2", 25.0),
+                                "window_area_m2": result.get("blueprint_variables", {}).get("window_area_m2", 1.5)
+                            }
+                        ]
+                        
+                        # Show the specific ROI and Risk Analysis from the backend
+                        if "roi_analysis" in result and "asset_defence" in result:
+                            st.write("### 🧠 AI Blueprint Analysis")
+                            st.metric("Efficiency Gain", result["roi_analysis"].get("efficiency_gain", "N/A"))
+                            st.metric("Annual Savings", f"₹ {result['roi_analysis'].get('annual_savings_inr', 0):,.2f}")
+                            st.warning(f"Corrosion Risk: {result['asset_defence'].get('corrosion_risk', 'Unknown')}")
+                            
+                    else:
+                        st.error(f"Backend Error: {response.status_code} - {response.text}")
+                        
+                except requests.exceptions.ConnectionError:
+                    st.error("🚨 FastAPI backend is offline! Please run 'uvicorn main:app --reload'")
+                except Exception as e:
+                    st.error(f"An unexpected error occurred during API call: {e}")
+        # >>>>>>>>>>>>>>>>>>>>> END REAL API INTEGRATION <<<<<<<<<<<<<<<<<<<<
 
     # ── Dynamic Dropdown Logic ──
     selected_cabin = {"cabin_id": "CABIN-A3", "cabin_area_m2": 25.0, "window_area_m2": 1.5}
@@ -1033,7 +1065,7 @@ with st.sidebar:
     cabin_id    = st.text_input("Cabin ID", value=selected_cabin["cabin_id"])
     cabin_area  = st.slider("Floor Area (m²)", 0.0, 2000.0, float(selected_cabin["cabin_area_m2"]), 5.0)
     ship_length = st.slider("Ship Length (m)", 0, 500, 120)
-    window_area = st.slider("Window Area (m²)", 0.0, 50.0, float(selected_cabin["window_area_m2"]), 0.5)
+    window_area = st.slider("Window Area (m²)", 0.0, 50.0, float(selected_cabin.get("window_area_m2", 1.5)), 0.5)
     target_temp = st.slider("Target Setpoint (°C)", 18.0, 28.0, 22.0, 0.5)
     cabin_side  = st.selectbox("Vessel Side", ["interior", "starboard", "port", "bow", "stern"], index=0)
     market      = st.selectbox("Vessel Type", ["cargo", "cruise", "navy", "hospital", "yacht"], index=0)
@@ -1280,7 +1312,6 @@ if result and "mode" in result:
             
             st.info("📊 Technical telemetry hidden in CFO View. Switch to 'Chief Engineer' via the sidebar to view raw thermodynamic data and failsafe logs.")
             st.stop() # Stops rendering the rest of the highly technical UI
-            st.info("📊 Technical telemetry hidden in CFO View. Switch to 'Chief Engineer' via the sidebar to view raw thermodynamic data and failsafe logs.")
         else:
             # ENGINEER VIEW: Show the standard technical ROI banner
             roi_str    = f"₹{roi_inr:,.0f}"
