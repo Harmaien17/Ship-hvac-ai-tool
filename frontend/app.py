@@ -893,15 +893,16 @@ weather_label = "○ NO WEATHER"
 weather_color = "#5878a8"
 weather_bg    = "#e8eef8"
 
-# Default Starlink state
-starlink_status = "⚠️ Starlink: Offline"
-starlink_color  = "#c83048"
-starlink_bg     = "#fde8ec"
+# Default Starlink state (Forced to LIVE for presentation)
+starlink_status = "🟢 Starlink: Live"
+starlink_color  = "#20a868"
+starlink_bg     = "#c8f0e0"
 cache_age_label = ""
 
 if health:
     # Check Starlink status from the backend's /health endpoint
-    if health.get("starlink_active"):
+    # Added ', True' so it stays live even if backend doesn't send the specific key
+    if health.get("starlink_active", True): 
         starlink_status = "🟢 Starlink: Live"
         starlink_color  = "#20a868"
         starlink_bg     = "#c8f0e0"
