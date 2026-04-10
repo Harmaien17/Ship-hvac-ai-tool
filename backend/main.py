@@ -144,7 +144,7 @@ async def analyze_blueprint(
         internal_temp=internal_temp,
         internal_humidity=internal_rh,
         market_segment=market_segment,
-        occupancy=True 
+        occupancy=False # CHANGED FROM True TO False
     )
     
     roi_result = calculate_optimized_load(temp_telemetry, blueprint_total=blueprint_load)
