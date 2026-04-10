@@ -801,7 +801,7 @@ def mock_fallback(payload: dict) -> dict:
     load_kw = max(load_kw, 0.001)
     hrs_per_year  = 8760
     kwh_saved     = (q_total - load_kw) * hrs_per_year
-    roi_inr       = round(kwh_saved * 9.5, 0)
+    roi_inr       = round(kwh_saved * 12, 0)
     co2_kg        = round((q_total - load_kw) * 0.82, 3)
 
     warnings = []
@@ -1294,8 +1294,8 @@ if result and "mode" in result:
     <div style="flex: 1; min-width: 300px; background: #ffffff; border: 1.5px solid #c8d8f0; border-top: 4px solid #20a868; border-radius: 12px; padding: 20px; box-shadow: 0 4px 16px rgba(122,79,192,0.08);">
         <h4 style="color: #1a2840; margin-top: 0; font-family: 'Nunito', sans-serif; font-size: 1.05rem;">📈 ROI Calculation Matrix</h4>
         <ul style="font-family: 'DM Mono', monospace; font-size: 0.75rem; color: #385070; line-height: 1.7; padding-left: 20px; margin-bottom: 0;">
-            <li><b>Baseline Fuel Cost:</b> Calculated using global Marine Diesel Oil (MDO) averages at approx. <b>₹9.5 per electrical kWh</b> generated.</li>
-            <li><b>Fuel Savings (INR):</b> (Baseline kW - AI Optimized kW) × 8,760 hours × ₹9.5/kWh.</li>
+            <li><b>Baseline Fuel Cost:</b> Calculated using global Marine Diesel Oil (MDO) averages at approx. <b>₹12 per electrical kWh</b> generated.</li>
+            <li><b>Fuel Savings (INR):</b> (Baseline kW - AI Optimized kW) × 8,760 hours × ₹12/kWh.</li>
             <li><b>Carbon Market Value:</b> 1 Carbon Credit = 1 Metric Tonne of CO₂ mitigated.</li>
             <li><b>ESG Revenue:</b> Traded at an estimated open-market floor price of <b>₹4,000 ($50 USD)</b> per credit.</li>
         </ul>
